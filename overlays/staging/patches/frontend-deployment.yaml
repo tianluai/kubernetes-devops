@@ -1,0 +1,18 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tianluai-web
+spec:
+  replicas: 2
+  template:
+    spec:
+      containers:
+        - name: web
+          image: tianluai/tianluai-web:staging
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
