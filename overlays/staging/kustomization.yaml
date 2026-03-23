@@ -3,13 +3,11 @@ kind: Kustomization
 
 namespace: tianluai-staging
 
-namePrefix: staging-
-
 resources:
   - ../../base
+  - namespace.yaml
 
 patches:
-  - path: patches/namespace.yaml
   - path: patches/backend-deployment.yaml
   - path: patches/frontend-deployment.yaml
   - path: patches/backend-config.yaml

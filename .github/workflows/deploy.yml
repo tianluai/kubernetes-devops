@@ -118,9 +118,8 @@ jobs:
       - name: Wait for rollout
         run: |
           NS="tianluai-${{ matrix.environment }}"
-          PREFIX="${{ matrix.environment }}-"
-          kubectl rollout status deployment/${PREFIX}tianluai-api -n ${NS} --timeout=300s
-          kubectl rollout status deployment/${PREFIX}tianluai-web -n ${NS} --timeout=300s
+          kubectl rollout status deployment/tianluai-api -n ${NS} --timeout=300s
+          kubectl rollout status deployment/tianluai-web -n ${NS} --timeout=300s
 
       - name: Verify pods
         run: |
@@ -160,32 +159,5 @@ jobs:
         run: |
           ENV="${{ github.event.client_payload.environment }}"
           NS="tianluai-${ENV}"
-          PREFIX="${ENV}-"
-          kubectl rollout status deployment/${PREFIX}tianluai-api -n ${NS} --timeout=300s || true
-          kubectl rollout status deployment/${PREFIX}tianluai-web -n ${NS} --timeout=300s || true
-
-  # ── Notify on Failure ──
-  notify:
-    name: Notify on Failure
-    runs-on: ubuntu-latest
-    needs: [deploy, deploy-dispatch]
-    if: failure()
-    steps:
-      - name: Send Slack notification
-        uses: slackapi/slack-github-action@v2.0.0
-        with:
-          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
-          webhook-type: incoming-webhook
-          payload: |
-            {
-              "text": "Deployment failed for tianluai (${{ github.event_name }})",
-              "blocks": [
-                {
-                  "type": "section",
-                  "text": {
-                    "type": "mrkdwn",
-                    "text": ":x: *Deployment Failed*\n*Repo:* ${{ github.repository }}\n*Branch:* ${{ github.ref_name }}\n*Run:* <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View>"
-                  }
-                }
-              ]
-            }
+          kubectl rollout status deployment/tianluai-api -n ${NS} --timeout=300s || true
+          kubectl rollout status deployment/tianluai-web -n ${NS} --timeout=300s || true
