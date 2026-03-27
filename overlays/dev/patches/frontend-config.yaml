@@ -5,3 +5,4 @@ metadata:
 data:
   NODE_ENV: "development"
   PORT: "3000"
+  NEXT_PUBLIC_API_URL: "https://ai-api-dev.tianlu.tech"

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Configuration
-CLUSTER_NAME="tianluai-k8s"
+CLUSTER_NAME="tianlu-k8s"
 REGION="nyc1"
 NODE_SIZE="s-2vcpu-4gb"
 NODE_COUNT=3

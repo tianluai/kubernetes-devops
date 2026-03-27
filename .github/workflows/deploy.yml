@@ -22,7 +22,8 @@ on:
           - prod
 
 env:
-  DIGITALOCEAN_CLUSTER_NAME: tianluai-k8s
+  # Must match your DOKS cluster name (see: doctl kubernetes cluster list)
+  DIGITALOCEAN_CLUSTER_NAME: tianlu-k8s
 
 jobs:
   # ── Validate Manifests ──
@@ -121,11 +122,12 @@ jobs:
           kubectl rollout status deployment/tianluai-api -n ${NS} --timeout=300s
           kubectl rollout status deployment/tianluai-web -n ${NS} --timeout=300s
 
-      - name: Verify pods
+      - name: Verify pods and ingress
         run: |
           NS="tianluai-${{ matrix.environment }}"
           kubectl get pods -n ${NS}
           kubectl get svc -n ${NS}
+          kubectl get ingress -n ${NS}
 
   # ── Deploy from dispatch (after image update) ──
   deploy-dispatch:
@@ -161,3 +163,4 @@ jobs:
           NS="tianluai-${ENV}"
           kubectl rollout status deployment/tianluai-api -n ${NS} --timeout=300s || true
           kubectl rollout status deployment/tianluai-web -n ${NS} --timeout=300s || true
+          kubectl get ingress -n ${NS}

@@ -5,3 +5,4 @@ resources:
   - dockerhub-secret.yaml
   - backend/
   - frontend/
+  - ingress.yaml

@@ -5,3 +5,4 @@ metadata:
 data:
   PORT: "3001"
   NODE_ENV: "staging"
+  CORS_ORIGIN: "https://ai-staging.tianlu.tech"

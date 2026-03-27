@@ -5,3 +5,4 @@ metadata:
 data:
   PORT: "3001"
   NODE_ENV: "development"
+  CORS_ORIGIN: "https://ai-dev.tianlu.tech"

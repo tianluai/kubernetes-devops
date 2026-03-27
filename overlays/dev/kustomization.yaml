@@ -14,3 +14,4 @@ patches:
   - path: patches/frontend-config.yaml
   - path: patches/backend-secrets.yaml
   - path: patches/frontend-secrets.yaml
+  - path: patches/ingress.yaml

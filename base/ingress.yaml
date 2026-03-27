@@ -1,0 +1,32 @@
+# Hostnames are overridden per overlay (dev/staging). Prod uses these defaults.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: tianluai-ingress
+  labels:
+    app.kubernetes.io/part-of: tianluai
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: ai.tianlu.tech
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: tianluai-web
+                port:
+                  number: 80
+    - host: ai-api.tianlu.tech
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: tianluai-api
+                port:
+                  number: 80

@@ -9,10 +9,12 @@ on:
         type: choice
         options:
           - setup-docker-secret
+          - install-ingress-nginx
           - full-setup
 
 env:
-  DIGITALOCEAN_CLUSTER_NAME: tianluai-k8s
+  DIGITALOCEAN_CLUSTER_NAME: tianlu-k8s
+  INGRESS_NGINX_MANIFEST: https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.12.0/deploy/static/provider/do/deploy.yaml
 
 jobs:
   setup:
@@ -32,7 +34,23 @@ jobs:
       - name: Setup kubectl
         uses: azure/setup-kubectl@v4
 
+      - name: Install NGINX Ingress Controller (DigitalOcean)
+        if: github.event.inputs.action == 'install-ingress-nginx' || github.event.inputs.action == 'full-setup'
+        run: |
+          kubectl apply -f "${{ env.INGRESS_NGINX_MANIFEST }}"
+          kubectl wait --namespace ingress-nginx \
+            --for=condition=ready pod \
+            --selector=app.kubernetes.io/component=controller \
+            --timeout=300s
+
+      - name: Show Ingress LoadBalancer IP
+        if: github.event.inputs.action == 'install-ingress-nginx' || github.event.inputs.action == 'full-setup'
+        run: |
+          echo "Point Cloudflare A records for ai / ai-api (prod) to this IP:"
+          kubectl get svc -n ingress-nginx ingress-nginx-controller -o wide
+
       - name: Create Docker Hub secret in all namespaces
+        if: github.event.inputs.action == 'setup-docker-secret' || github.event.inputs.action == 'full-setup'
         run: |
           for NS in tianluai-dev tianluai-staging tianluai-prod; do
             kubectl create namespace ${NS} --dry-run=client -o yaml | kubectl apply -f -
