@@ -7,11 +7,10 @@ resources:
   - ../../base
   - namespace.yaml
 
+# Secret payloads are not in this overlay; create backend-secrets / frontend-secrets separately.
 patches:
   - path: patches/backend-deployment.yaml
   - path: patches/frontend-deployment.yaml
   - path: patches/backend-config.yaml
   - path: patches/frontend-config.yaml
-  - path: patches/backend-secrets.yaml
-  - path: patches/frontend-secrets.yaml
   - path: patches/ingress.yaml

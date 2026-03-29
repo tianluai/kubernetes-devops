@@ -15,7 +15,7 @@ on:
       environment:
         required: true
         type: choice
-        options: [dev, staging, prod]
+        options: [staging, prod]
 
 permissions:
   contents: write
@@ -45,6 +45,8 @@ jobs:
     if: github.event_name == 'repository_dispatch'
     runs-on: ubuntu-latest
     environment: ${{ github.event.client_payload.environment }}
+    env:
+      ENV: ${{ github.event.client_payload.environment }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -85,11 +87,9 @@ jobs:
       - uses: azure/setup-kubectl@v4
 
       - name: Apply to cluster
-        env:
-          ENV: ${{ github.event.client_payload.environment }}
         run: |
-          kubectl kustomize overlays/${ENV} | kubectl apply -f -
-          NS="tianluai-${ENV}"
+          kubectl kustomize overlays/${{ env.ENV }} | kubectl apply -f -
+          NS="tianluai-${{ env.ENV }}"
           kubectl rollout status deployment/tianluai-api -n ${NS} --timeout=300s
           kubectl rollout status deployment/tianluai-web -n ${NS} --timeout=300s
 
@@ -97,6 +97,8 @@ jobs:
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     environment: ${{ github.event.inputs.environment }}
+    env:
+      ENV: ${{ github.event.inputs.environment }}
     steps:
       - uses: actions/checkout@v4
       - uses: digitalocean/action-doctl@v2
@@ -104,8 +106,10 @@ jobs:
           token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
       - run: doctl kubernetes cluster kubeconfig save ${{ env.CLUSTER_NAME }}
       - uses: azure/setup-kubectl@v4
-      - run: kubectl kustomize overlays/${{ github.event.inputs.environment }} | kubectl apply -f -
-      - run: |
-          NS=tianluai-${{ github.event.inputs.environment }}
+
+      - name: Apply to cluster
+        run: |
+          kubectl kustomize overlays/${{ env.ENV }} | kubectl apply -f -
+          NS=tianluai-${{ env.ENV }}
           kubectl rollout status deployment/tianluai-api -n ${NS} --timeout=300s
           kubectl rollout status deployment/tianluai-web -n ${NS} --timeout=300s

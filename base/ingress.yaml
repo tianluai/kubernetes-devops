@@ -1,4 +1,4 @@
-# Hostnames are overridden per overlay (dev/staging). Prod uses these defaults.
+# Hostnames are overridden per overlay (staging). Prod uses these defaults.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:

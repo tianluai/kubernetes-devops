@@ -38,7 +38,7 @@ jobs:
         env:
           REGISTRY_NAME: ${{ secrets.DOCR_REGISTRY_NAME }}
         run: |
-          for NS in tianluai-dev tianluai-staging tianluai-prod; do
+          for NS in tianluai-staging tianluai-prod; do
             kubectl create namespace ${NS} --dry-run=client -o yaml | kubectl apply -f -
             doctl registry kubernetes-manifest "${REGISTRY_NAME}" --namespace "${NS}" | kubectl apply -f -
           done

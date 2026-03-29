@@ -10,7 +10,6 @@ NGINX Ingress (one DO Load Balancer) routes by host to `tianluai-web` and `tianl
 |-------------|--------------------------|------------------------------|
 | prod        | `ai.tianlu.tech`         | `ai-api.tianlu.tech`         |
 | staging     | `ai-staging.tianlu.tech` | `ai-api-staging.tianlu.tech` |
-| dev         | `ai-dev.tianlu.tech`     | `ai-api-dev.tianlu.tech`     |
 
 ## Layout
 
@@ -18,18 +17,20 @@ NGINX Ingress (one DO Load Balancer) routes by host to `tianluai-web` and `tianl
 .github/workflows/
   deploy.yml        — validate on PR; apply on dispatch / manual; push to main on overlay changes
   setup-cluster.yml — ingress-nginx, DOCR pull secret per namespace
-base/, overlays/{dev,staging,prod}/
+base/, overlays/{staging,prod}/
 ```
 
 ## One-time setup
 
 1. **DO**: Kubernetes cluster (name matches `CLUSTER_NAME` in workflows, default `tianlu-k8s`), Container Registry (slug matches image prefix, e.g. `registry.digitalocean.com/<slug>/…`).
 2. **GitHub Actions → Setup cluster**: run `install-ingress`, then `docr-pull-secret` (or `full`). Point DNS A records at the Ingress external IP.
-3. **Secrets**
-   - **kubernetes-devops:** `DIGITALOCEAN_ACCESS_TOKEN`, `GH_PAT_DEVOPS_TOKEN` (contents: write, to push manifest commits), `DOCR_REGISTRY_NAME` (registry slug for `doctl registry kubernetes-manifest`).
-   - **tianluai_api / tianluai-web:** `DIGITALOCEAN_ACCESS_TOKEN`, `DOCR_REGISTRY` (full host + registry path, e.g. `registry.digitalocean.com/tianluai`), `GH_PAT_DEVOPS_TOKEN` (repo dispatch to kubernetes-devops + push for version bumps).
-4. **Frontend:** `NEXT_PUBLIC_API_URL` and Clerk/Sentry secrets as needed; Next.js bakes `NEXT_PUBLIC_*` at image build time.
-5. Replace placeholders in `overlays/<env>/patches/*-secrets.yaml`.
+3. **Secrets (CI / cluster)**
+   - **kubernetes-devops (repo):** `DIGITALOCEAN_ACCESS_TOKEN`, `GH_PAT_DEVOPS_TOKEN` (write, for manifest commits), `DOCR_REGISTRY_NAME` (for `doctl registry kubernetes-manifest` in setup).
+   - **Runtime Kubernetes secrets** (`backend-secrets`, `frontend-secrets`): **not** applied by `deploy.yml`. Create or update them yourself (`kubectl`, Sealed Secrets, External Secrets, etc.); see `overlays/prod/*-secrets.example.yaml` as a template.
+   - **App repos (tianluai_api / tianluai-web):** `DIGITALOCEAN_ACCESS_TOKEN`, `DOCR_REGISTRY`, `GH_PAT_DEVOPS_TOKEN` for CI and `repository_dispatch` to kubernetes-devops. **tianluai-web** also uses `NEXT_PUBLIC_SENTRY_DSN` and optional `SENTRY_ORG`, `SENTRY_PROJECT`, `SENTRY_AUTH_TOKEN` at **Docker build** (repository secrets).
+4. **Sentry (Next.js):** `NEXT_PUBLIC_SENTRY_DSN` and optional `SENTRY_ORG`, `SENTRY_PROJECT`, `SENTRY_AUTH_TOKEN` are **build-time** in tianluai-web (Docker `ARG` / CI `build-args`), not injected by kubernetes-devops at deploy — the client bundle is baked when the image is built.
+5. **Frontend:** `NEXT_PUBLIC_*` is baked at image build time in tianluai-web; the web pod’s server-side Clerk key is mounted via **`frontend-secrets`** (same value as the API if you use one Clerk app).
+6. **Where secrets live (mental model):** `deploy.yml` applies **Kustomize manifests only** (Deployments, Services, ConfigMaps, Ingress, …). **Kubernetes `Secret` objects** in each namespace are maintained outside this workflow unless you add another mechanism.
 
 ## Flow
 
