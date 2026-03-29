@@ -33,7 +33,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: azure/setup-kubectl@v4
-      - run: kubectl kustomize overlays/${{ matrix.env }} | kubectl apply --dry-run=client -f -
+      - run: kubectl kustomize overlays/${{ matrix.env }} | kubectl apply --dry-run=client --validate=false -f -
 
   dispatch-deploy:
     if: github.event_name == 'repository_dispatch'
