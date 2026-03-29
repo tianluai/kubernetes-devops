@@ -6,6 +6,8 @@ on:
     paths:
       - "base/**"
       - "overlays/**"
+      - ".github/workflows/**"
+      - "scripts/**"
 
   repository_dispatch:
     types: [deploy-backend, deploy-frontend]
@@ -89,10 +91,21 @@ jobs:
 
       - uses: azure/setup-kubectl@v4
 
-      - name: Apply to cluster
+      - name: Apply manifests (Kustomize)
+        run: kubectl kustomize overlays/${{ env.ENV }} | kubectl apply -f -
+
+      - name: Sync runtime secrets (GitHub Environment → cluster)
+        env:
+          K8S_NAMESPACE: tianluai-${{ env.ENV }}
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}
+          CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+        run: bash scripts/ensure-k8s-secrets.sh
+
+      - name: Rollout (pick up secrets + manifests)
         run: |
-          kubectl kustomize overlays/${{ env.ENV }} | kubectl apply -f -
           NS="tianluai-${{ env.ENV }}"
+          kubectl rollout restart deployment/tianluai-api deployment/tianluai-web -n "${NS}"
           if ! kubectl rollout status deployment/tianluai-api -n "${NS}" --timeout=300s; then
             echo "::group::Debug: tianluai-api rollout failed"
             kubectl get pods -n "${NS}" -o wide
@@ -126,10 +139,21 @@ jobs:
       - run: doctl kubernetes cluster kubeconfig save ${{ env.CLUSTER_NAME }}
       - uses: azure/setup-kubectl@v4
 
-      - name: Apply to cluster
+      - name: Apply manifests (Kustomize)
+        run: kubectl kustomize overlays/${{ env.ENV }} | kubectl apply -f -
+
+      - name: Sync runtime secrets (GitHub Environment → cluster)
+        env:
+          K8S_NAMESPACE: tianluai-${{ env.ENV }}
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}
+          CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+        run: bash scripts/ensure-k8s-secrets.sh
+
+      - name: Rollout (pick up secrets + manifests)
         run: |
-          kubectl kustomize overlays/${{ env.ENV }} | kubectl apply -f -
           NS=tianluai-${{ env.ENV }}
+          kubectl rollout restart deployment/tianluai-api deployment/tianluai-web -n "${NS}"
           if ! kubectl rollout status deployment/tianluai-api -n "${NS}" --timeout=300s; then
             echo "::group::Debug: tianluai-api rollout failed"
             kubectl get pods -n "${NS}" -o wide

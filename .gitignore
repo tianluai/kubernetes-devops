@@ -7,3 +7,6 @@
 kubeconfig
 *.pem
 *.key
+
+# Filled Kubernetes Secret manifests (real values). Keep examples in repo; apply copies locally only.
+*-secrets.local.yaml

@@ -26,8 +26,12 @@ spec:
           envFrom:
             - configMapRef:
                 name: frontend-config
-            - secretRef:
-                name: frontend-secrets
+          env:
+            - name: CLERK_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: frontend-secrets
+                  key: CLERK_SECRET_KEY
           resources:
             requests:
               cpu: 100m

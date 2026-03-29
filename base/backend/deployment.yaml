@@ -26,8 +26,24 @@ spec:
           envFrom:
             - configMapRef:
                 name: backend-config
-            - secretRef:
-                name: backend-secrets
+          # Secret values are not in git — only wiring. CI syncs backend-secrets from GitHub Environment secrets.
+          env:
+            - name: MONGODB_URI
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secrets
+                  key: MONGODB_URI
+            - name: CLERK_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secrets
+                  key: CLERK_SECRET_KEY
+            - name: SENTRY_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secrets
+                  key: SENTRY_DSN
+                  optional: true
           resources:
             requests:
               cpu: 100m
