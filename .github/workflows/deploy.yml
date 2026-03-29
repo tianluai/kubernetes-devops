@@ -39,7 +39,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: azure/setup-kubectl@v4
-      - run: kubectl kustomize overlays/${{ matrix.env }} | kubectl apply --dry-run=client --validate=false -f -
+      # kubectl apply --dry-run=client still talks to the API server for discovery; PR CI has no kubeconfig,
+      # so it falls back to localhost:8080 and fails. Rendering with kustomize is enough to validate overlays.
+      - name: Kustomize build
+        run: kubectl kustomize overlays/${{ matrix.env }} >/dev/null
 
   dispatch-deploy:
     if: github.event_name == 'repository_dispatch'
