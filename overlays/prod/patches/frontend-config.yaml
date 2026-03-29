@@ -5,4 +5,6 @@ metadata:
 data:
   NODE_ENV: "production"
   PORT: "3000"
+  # Clerk Dashboard → Domains → Frontend API (custom host). Keeps server/middleware aligned with proxy setup.
+  NEXT_PUBLIC_CLERK_FAPI: "https://clerk.ai.tianlu.tech"
   NEXT_PUBLIC_API_URL: "https://ai-api.tianlu.tech"
