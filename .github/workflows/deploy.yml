@@ -93,8 +93,24 @@ jobs:
         run: |
           kubectl kustomize overlays/${{ env.ENV }} | kubectl apply -f -
           NS="tianluai-${{ env.ENV }}"
-          kubectl rollout status deployment/tianluai-api -n ${NS} --timeout=300s
-          kubectl rollout status deployment/tianluai-web -n ${NS} --timeout=300s
+          if ! kubectl rollout status deployment/tianluai-api -n "${NS}" --timeout=300s; then
+            echo "::group::Debug: tianluai-api rollout failed"
+            kubectl get pods -n "${NS}" -o wide
+            kubectl get events -n "${NS}" --sort-by='.lastTimestamp' | tail -50
+            kubectl describe deployment/tianluai-api -n "${NS}"
+            kubectl logs -n "${NS}" -l app=tianluai-api --tail=120 --all-containers=true || true
+            echo "::endgroup::"
+            exit 1
+          fi
+          if ! kubectl rollout status deployment/tianluai-web -n "${NS}" --timeout=300s; then
+            echo "::group::Debug: tianluai-web rollout failed"
+            kubectl get pods -n "${NS}" -o wide
+            kubectl get events -n "${NS}" --sort-by='.lastTimestamp' | tail -50
+            kubectl describe deployment/tianluai-web -n "${NS}"
+            kubectl logs -n "${NS}" -l app=tianluai-web --tail=120 --all-containers=true || true
+            echo "::endgroup::"
+            exit 1
+          fi
 
   manual-deploy:
     if: github.event_name == 'workflow_dispatch'
@@ -114,5 +130,21 @@ jobs:
         run: |
           kubectl kustomize overlays/${{ env.ENV }} | kubectl apply -f -
           NS=tianluai-${{ env.ENV }}
-          kubectl rollout status deployment/tianluai-api -n ${NS} --timeout=300s
-          kubectl rollout status deployment/tianluai-web -n ${NS} --timeout=300s
+          if ! kubectl rollout status deployment/tianluai-api -n "${NS}" --timeout=300s; then
+            echo "::group::Debug: tianluai-api rollout failed"
+            kubectl get pods -n "${NS}" -o wide
+            kubectl get events -n "${NS}" --sort-by='.lastTimestamp' | tail -50
+            kubectl describe deployment/tianluai-api -n "${NS}"
+            kubectl logs -n "${NS}" -l app=tianluai-api --tail=120 --all-containers=true || true
+            echo "::endgroup::"
+            exit 1
+          fi
+          if ! kubectl rollout status deployment/tianluai-web -n "${NS}" --timeout=300s; then
+            echo "::group::Debug: tianluai-web rollout failed"
+            kubectl get pods -n "${NS}" -o wide
+            kubectl get events -n "${NS}" --sort-by='.lastTimestamp' | tail -50
+            kubectl describe deployment/tianluai-web -n "${NS}"
+            kubectl logs -n "${NS}" -l app=tianluai-web --tail=120 --all-containers=true || true
+            echo "::endgroup::"
+            exit 1
+          fi

@@ -4,6 +4,12 @@ metadata:
   name: tianluai-api
 spec:
   replicas: 1
+  # Single-node / tight CPU: never run two API pods during a rollout (avoids 2× scheduling).
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
   template:
     spec:
       containers:
@@ -11,8 +17,8 @@ spec:
           image: registry.digitalocean.com/tianluai/tianluai-api:latest
           resources:
             requests:
-              cpu: 100m
-              memory: 128Mi
+              cpu: 50m
+              memory: 64Mi
             limits:
-              cpu: 500m
-              memory: 512Mi
+              cpu: 300m
+              memory: 384Mi

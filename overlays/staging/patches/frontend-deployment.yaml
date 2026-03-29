@@ -4,6 +4,11 @@ metadata:
   name: tianluai-web
 spec:
   replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
   template:
     spec:
       containers:
@@ -11,8 +16,8 @@ spec:
           image: registry.digitalocean.com/tianluai/tianluai-web:latest
           resources:
             requests:
-              cpu: 100m
-              memory: 128Mi
+              cpu: 50m
+              memory: 64Mi
             limits:
-              cpu: 500m
-              memory: 512Mi
+              cpu: 300m
+              memory: 384Mi

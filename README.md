@@ -52,3 +52,7 @@ kubectl get ingress -n tianluai-prod
 ```
 
 If pods show `ImagePullBackOff`, confirm DOCR pull secret exists in the namespace (`registry-<slug>`) and image names match `registry.digitalocean.com/<slug>/…`.
+
+If **`manual-deploy` / `dispatch-deploy` times out** on `kubectl rollout status`, the API or web pod is not becoming Ready. Typical causes: missing **`backend-secrets`** / **`frontend-secrets`**, bad **`MONGODB_URI`**, readiness probes failing, or **`FailedScheduling` / Insufficient cpu** on a single small node (prod + staging + system pods). Staging overlays use modest **requests** and **`maxSurge: 0`** so rollouts do not briefly double pods; if it still does not fit, add a node, scale other workloads down, or lower requests further.
+
+The workflow prints pods, events, describe, and logs in a **Debug** group when rollout fails. Create secrets from `overlays/prod/*-secrets.example.yaml` (or your own manifests) if needed.
