@@ -19,7 +19,7 @@ spec:
     spec:
       containers:
         - name: web
-          image: tianluai/tianluai-web:latest
+          image: registry.digitalocean.com/tianluai/tianluai-web:latest
           ports:
             - containerPort: 3000
               protocol: TCP
@@ -48,4 +48,4 @@ spec:
             initialDelaySeconds: 15
             periodSeconds: 20
       imagePullSecrets:
-        - name: dockerhub-credentials
+        - name: registry-tianluai

@@ -1,63 +1,44 @@
-name: Setup Cluster Infrastructure
+name: Setup cluster
 
 on:
   workflow_dispatch:
     inputs:
       action:
-        description: "Action to perform"
         required: true
         type: choice
         options:
-          - setup-docker-secret
-          - install-ingress-nginx
-          - full-setup
+          - install-ingress
+          - docr-pull-secret
+          - full
 
 env:
-  DIGITALOCEAN_CLUSTER_NAME: tianlu-k8s
-  INGRESS_NGINX_MANIFEST: https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.12.0/deploy/static/provider/do/deploy.yaml
+  CLUSTER_NAME: tianlu-k8s
+  INGRESS_URL: https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.12.0/deploy/static/provider/do/deploy.yaml
 
 jobs:
   setup:
-    name: Setup - ${{ github.event.inputs.action }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install doctl
-        uses: digitalocean/action-doctl@v2
+      - uses: digitalocean/action-doctl@v2
         with:
           token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+      - run: doctl kubernetes cluster kubeconfig save ${{ env.CLUSTER_NAME }}
+      - uses: azure/setup-kubectl@v4
 
-      - name: Configure kubectl
-        run: doctl kubernetes cluster kubeconfig save ${{ env.DIGITALOCEAN_CLUSTER_NAME }}
-
-      - name: Setup kubectl
-        uses: azure/setup-kubectl@v4
-
-      - name: Install NGINX Ingress Controller (DigitalOcean)
-        if: github.event.inputs.action == 'install-ingress-nginx' || github.event.inputs.action == 'full-setup'
+      - name: Ingress
+        if: inputs.action == 'install-ingress' || inputs.action == 'full'
         run: |
-          kubectl apply -f "${{ env.INGRESS_NGINX_MANIFEST }}"
-          kubectl wait --namespace ingress-nginx \
-            --for=condition=ready pod \
-            --selector=app.kubernetes.io/component=controller \
-            --timeout=300s
-
-      - name: Show Ingress LoadBalancer IP
-        if: github.event.inputs.action == 'install-ingress-nginx' || github.event.inputs.action == 'full-setup'
-        run: |
-          echo "Point Cloudflare A records for ai / ai-api (prod) to this IP:"
+          kubectl apply -f "${{ env.INGRESS_URL }}"
+          kubectl wait -n ingress-nginx --for=condition=ready pod -l app.kubernetes.io/component=controller --timeout=300s
           kubectl get svc -n ingress-nginx ingress-nginx-controller -o wide
 
-      - name: Create Docker Hub secret in all namespaces
-        if: github.event.inputs.action == 'setup-docker-secret' || github.event.inputs.action == 'full-setup'
+      - name: DOCR pull secret
+        if: inputs.action == 'docr-pull-secret' || inputs.action == 'full'
+        env:
+          REGISTRY_NAME: ${{ secrets.DOCR_REGISTRY_NAME }}
         run: |
           for NS in tianluai-dev tianluai-staging tianluai-prod; do
             kubectl create namespace ${NS} --dry-run=client -o yaml | kubectl apply -f -
-            kubectl create secret docker-registry dockerhub-credentials \
-              --docker-server=https://index.docker.io/v1/ \
-              --docker-username=${{ secrets.DOCKERHUB_USERNAME }} \
-              --docker-password=${{ secrets.DOCKERHUB_TOKEN }} \
-              --namespace=${NS} \
-              --dry-run=client -o yaml | kubectl apply -f -
+            doctl registry kubernetes-manifest "${REGISTRY_NAME}" --namespace "${NS}" | kubectl apply -f -
           done

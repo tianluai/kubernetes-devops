@@ -3,12 +3,12 @@ kind: Deployment
 metadata:
   name: tianluai-web
 spec:
-  replicas: 2
+  replicas: 1
   template:
     spec:
       containers:
         - name: web
-          image: tianluai/tianluai-web:staging
+          image: registry.digitalocean.com/tianluai/tianluai-web:latest
           resources:
             requests:
               cpu: 100m

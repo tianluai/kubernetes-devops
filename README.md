@@ -1,140 +1,53 @@
 # kubernetes-devops
 
-Kubernetes manifests, CI/CD workflows, and infrastructure configuration for the Tianlu AI platform.
+Kustomize manifests and GitHub Actions for Tianlu AI on DigitalOcean Kubernetes (DOKS). App repos build images, push to **DigitalOcean Container Registry (DOCR)**, and send `repository_dispatch` here; this repo updates overlay image tags and applies manifests.
 
-## Architecture
+## Traffic
 
-Traffic flows through a **single Digital Ocean Load Balancer** created by the **NGINX Ingress Controller**. Host-based routing sends visitors to the frontend or backend Service (both `ClusterIP`).
+NGINX Ingress (one DO Load Balancer) routes by host to `tianluai-web` and `tianluai-api` (`ClusterIP`).
 
-```
-                    Cloudflare DNS (optional)
-                              │
-                              ▼
-              ┌───────────────────────────────┐
-              │  DO Load Balancer (1 public IP) │
-              │  ingress-nginx-controller      │
-              └───────────────┬───────────────┘
-                              │
-         ┌────────────────────┼────────────────────┐
-         │                    │                    │
-    ai*.tianlu.tech     ai-api*.tianlu.tech       │
-         │                    │                    │
-         ▼                    ▼                    │
-  ┌─────────────┐      ┌─────────────┐           │
-  │ tianluai-web │      │ tianluai-api │           │
-  │ Service :80  │      │ Service :80  │           │
-  └─────────────┘      └──────────────┘           │
-```
+| Environment | Frontend host            | API host                     |
+|-------------|--------------------------|------------------------------|
+| prod        | `ai.tianlu.tech`         | `ai-api.tianlu.tech`         |
+| staging     | `ai-staging.tianlu.tech` | `ai-api-staging.tianlu.tech` |
+| dev         | `ai-dev.tianlu.tech`     | `ai-api-dev.tianlu.tech`     |
 
-**Per environment**, Ingress hostnames differ (see overlays):
-
-| Environment | Frontend host              | API host                      |
-|-------------|----------------------------|-------------------------------|
-| **prod**    | `ai.tianlu.tech`           | `ai-api.tianlu.tech`          |
-| **staging** | `ai-staging.tianlu.tech`   | `ai-api-staging.tianlu.tech`  |
-| **dev**     | `ai-dev.tianlu.tech`       | `ai-api-dev.tianlu.tech`      |
-
-Use **single-level subdomains** (e.g. `ai-api.tianlu.tech`) so Cloudflare Universal SSL covers them. Avoid `api.ai.tianlu.tech` unless you add an Advanced Certificate for `*.ai.tianlu.tech`.
-
-## Repository Structure
+## Layout
 
 ```
-kubernetes-devops/
-├── .github/workflows/
-│   ├── deploy.yml              # Deploy pipeline (push, dispatch, manual)
-│   └── setup-cluster.yml       # Ingress + Docker Hub pull secrets
-├── base/
-│   ├── kustomization.yaml
-│   ├── ingress.yaml            # Host routing (prod hostnames in base)
-│   ├── dockerhub-secret.yaml
-│   ├── backend/                # Deployment, ClusterIP Service, ConfigMap, Secret
-│   └── frontend/
-├── overlays/dev|staging|prod/  # Namespace + patches (including ingress hosts)
-└── scripts/create-cluster.sh
+.github/workflows/
+  deploy.yml        — validate on PR; apply on dispatch / manual; push to main on overlay changes
+  setup-cluster.yml — ingress-nginx, DOCR pull secret per namespace
+base/, overlays/{dev,staging,prod}/
 ```
 
-## Prerequisites
+## One-time setup
 
-- [doctl](https://docs.digitalocean.com/reference/doctl/)
-- [kubectl](https://kubernetes.io/docs/tasks/tools/)
-- Docker Hub account
-- GitHub PAT for cross-repo dispatch (backend/frontend → this repo)
+1. **DO**: Kubernetes cluster (name matches `CLUSTER_NAME` in workflows, default `tianlu-k8s`), Container Registry (slug matches image prefix, e.g. `registry.digitalocean.com/<slug>/…`).
+2. **GitHub Actions → Setup cluster**: run `install-ingress`, then `docr-pull-secret` (or `full`). Point DNS A records at the Ingress external IP.
+3. **Secrets**
+   - **kubernetes-devops:** `DIGITALOCEAN_ACCESS_TOKEN`, `GH_PAT_DEVOPS_TOKEN` (contents: write, to push manifest commits), `DOCR_REGISTRY_NAME` (registry slug for `doctl registry kubernetes-manifest`).
+   - **tianluai_api / tianluai-web:** `DIGITALOCEAN_ACCESS_TOKEN`, `DOCR_REGISTRY` (full host + registry path, e.g. `registry.digitalocean.com/tianluai`), `GH_PAT_DEVOPS_TOKEN` (repo dispatch to kubernetes-devops + push for version bumps).
+4. **Frontend:** `NEXT_PUBLIC_API_URL` and Clerk/Sentry secrets as needed; Next.js bakes `NEXT_PUBLIC_*` at image build time.
+5. Replace placeholders in `overlays/<env>/patches/*-secrets.yaml`.
 
-## Initial Setup
+## Flow
 
-### 1. Create the cluster
+`main` on backend/frontend → tests → version bump → `doctl registry login` → push `…/tianluai-api` or `…/tianluai-web` → `repository_dispatch` (`deploy-backend` / `deploy-frontend`) → this repo patches `overlays/<env>/patches/*-deployment.yaml`, commits, `kubectl apply`, rollout wait.
 
-```bash
-doctl auth init
-./scripts/create-cluster.sh
-```
-
-Or create a cluster in the DO UI. Note the cluster name and set `DIGITALOCEAN_CLUSTER_NAME` in `.github/workflows/deploy.yml` and `setup-cluster.yml` if it differs from `tianlu-k8s`.
-
-### 2. Install Ingress + secrets
-
-Run **Setup Cluster Infrastructure** in GitHub Actions:
-
-- **`install-ingress-nginx`** — installs NGINX Ingress (DO LoadBalancer + public IP)
-- **`setup-docker-secret`** — Docker Hub pull secret in all app namespaces
-- **`full-setup`** — both
-
-After Ingress is up, get the **external IP**:
-
-```bash
-kubectl get svc -n ingress-nginx ingress-nginx-controller
-```
-
-### 3. Cloudflare DNS
-
-Create **A** records (Proxied) pointing to that **same** IP for each hostname you use, for example:
-
-| Type | Name (in Cloudflare) | Content   |
-|------|------------------------|-----------|
-| A    | `ai`                   | Ingress IP |
-| A    | `ai-api`               | Ingress IP |
-
-Repeat for staging/dev names (`ai-staging`, `ai-api-staging`, etc.) if you use those environments.
-
-Set **SSL/TLS → Full** (browser ↔ Cloudflare encrypted; Cloudflare ↔ origin can be HTTP).
-
-### 4. Frontend build-time API URL (important)
-
-Next.js inlines `NEXT_PUBLIC_*` at **Docker build** time. Set the GitHub Actions secret **`NEXT_PUBLIC_API_URL`** in the **frontend repo** to match the API URL for that deployment (e.g. `https://ai-api.tianlu.tech` for production). The ConfigMap in this repo documents the target URL; the running bundle must be built with the same value.
-
-### 5. GitHub Secrets
-
-**All three repos:** `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`
-
-**Backend & frontend:** `K8S_DEVOPS_PAT` (repo scope for kubernetes-devops)
-
-**Frontend CI:** `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `NEXT_PUBLIC_API_URL` (must match deployed API), optional Sentry vars
-
-**kubernetes-devops:** `DIGITALOCEAN_ACCESS_TOKEN`
-
-### 6. Overlay secrets
-
-Replace placeholders in `overlays/<env>/patches/*-secrets.yaml`.
-
-### 7. Deploy
+## Local apply
 
 ```bash
 kubectl kustomize overlays/prod | kubectl apply -f -
 ```
-
-## CI/CD Flow
-
-Pushes to `main` on backend/frontend build Docker images, dispatch updates image tags here, then this repo applies manifests to DOKS.
 
 ## Troubleshooting
 
 ```bash
 kubectl get pods -n tianluai-prod
 kubectl logs -f deployment/tianluai-api -n tianluai-prod
-kubectl describe pod <pod-name> -n tianluai-prod
-kubectl get svc -n tianluai-prod
+kubectl describe pod -n tianluai-prod -l app=tianluai-api
 kubectl get ingress -n tianluai-prod
-kubectl rollout restart deployment/tianluai-api -n tianluai-prod
 ```
 
-If Ingress returns 404, confirm `kubectl get ingress -n <ns>` shows the correct hosts and that DNS points to the Ingress LoadBalancer IP.
+If pods show `ImagePullBackOff`, confirm DOCR pull secret exists in the namespace (`registry-<slug>`) and image names match `registry.digitalocean.com/<slug>/…`.

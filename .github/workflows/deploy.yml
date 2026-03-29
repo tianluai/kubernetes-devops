@@ -1,4 +1,4 @@
-name: Deploy to Kubernetes
+name: Deploy
 
 on:
   push:
@@ -13,154 +13,93 @@ on:
   workflow_dispatch:
     inputs:
       environment:
-        description: "Target environment"
         required: true
         type: choice
-        options:
-          - dev
-          - staging
-          - prod
+        options: [dev, staging, prod]
+
+permissions:
+  contents: write
 
 env:
-  # Must match your DOKS cluster name (see: doctl kubernetes cluster list)
-  DIGITALOCEAN_CLUSTER_NAME: tianlu-k8s
+  CLUSTER_NAME: tianlu-k8s
 
 jobs:
-  # ── Validate Manifests ──
   validate:
-    name: Validate Manifests
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        environment: [dev, staging, prod]
+        env: [dev, staging, prod]
     steps:
       - uses: actions/checkout@v4
+      - uses: azure/setup-kubectl@v4
+      - run: kubectl kustomize overlays/${{ matrix.env }} | kubectl apply --dry-run=client -f -
 
-      - name: Setup kubectl
-        uses: azure/setup-kubectl@v4
-
-      - name: Validate with kustomize
-        run: kubectl kustomize overlays/${{ matrix.environment }} > /dev/null
-
-      - name: Dry-run manifests
-        run: |
-          kubectl kustomize overlays/${{ matrix.environment }} | \
-            kubectl apply --dry-run=client -f -
-
-  # ── Update Image Tag (from repository_dispatch) ──
-  update-image:
-    name: Update Image Tag
-    runs-on: ubuntu-latest
+  dispatch-deploy:
     if: github.event_name == 'repository_dispatch'
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Determine component
-        id: component
-        run: |
-          if [[ "${{ github.event.action }}" == "deploy-backend" ]]; then
-            echo "name=api" >> $GITHUB_OUTPUT
-            echo "file=backend-deployment.yaml" >> $GITHUB_OUTPUT
-          else
-            echo "name=web" >> $GITHUB_OUTPUT
-            echo "file=frontend-deployment.yaml" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Update image tag in overlay
-        run: |
-          ENV="${{ github.event.client_payload.environment }}"
-          IMAGE="${{ github.event.client_payload.image }}"
-          TAG="${{ github.event.client_payload.tag }}"
-          FILE="overlays/${ENV}/patches/${{ steps.component.outputs.file }}"
-
-          sed -i "s|image: .*|image: ${IMAGE}:${TAG}|" "${FILE}"
-
-      - name: Commit and push
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add .
-          git commit -m "chore: update ${{ steps.component.outputs.name }} image to ${{ github.event.client_payload.tag }} (${{ github.event.client_payload.environment }})"
-          git push
-
-  # ── Deploy to Cluster ──
-  deploy:
-    name: Deploy to ${{ matrix.environment }}
     runs-on: ubuntu-latest
-    needs: [validate]
-    if: |
-      always() &&
-      needs.validate.result == 'success' &&
-      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-    strategy:
-      matrix:
-        environment:
-          - ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.environment || 'dev' }}
-    environment: ${{ matrix.environment }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install doctl
-        uses: digitalocean/action-doctl@v2
-        with:
-          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
-
-      - name: Configure kubectl
-        run: doctl kubernetes cluster kubeconfig save ${{ env.DIGITALOCEAN_CLUSTER_NAME }}
-
-      - name: Setup kubectl
-        uses: azure/setup-kubectl@v4
-
-      - name: Apply manifests
-        run: kubectl kustomize overlays/${{ matrix.environment }} | kubectl apply -f -
-
-      - name: Wait for rollout
-        run: |
-          NS="tianluai-${{ matrix.environment }}"
-          kubectl rollout status deployment/tianluai-api -n ${NS} --timeout=300s
-          kubectl rollout status deployment/tianluai-web -n ${NS} --timeout=300s
-
-      - name: Verify pods and ingress
-        run: |
-          NS="tianluai-${{ matrix.environment }}"
-          kubectl get pods -n ${NS}
-          kubectl get svc -n ${NS}
-          kubectl get ingress -n ${NS}
-
-  # ── Deploy from dispatch (after image update) ──
-  deploy-dispatch:
-    name: Deploy (${{ github.event.client_payload.environment }})
-    runs-on: ubuntu-latest
-    needs: [update-image]
-    if: github.event_name == 'repository_dispatch'
     environment: ${{ github.event.client_payload.environment }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: main
+          token: ${{ secrets.GH_PAT_DEVOPS_TOKEN }}
+          fetch-depth: 0
 
-      - name: Install doctl
-        uses: digitalocean/action-doctl@v2
+      - name: Update image in overlay
+        env:
+          ENV: ${{ github.event.client_payload.environment }}
+          IMAGE: ${{ github.event.client_payload.image }}
+          TAG: ${{ github.event.client_payload.tag }}
+        run: |
+          if [[ "${{ github.event.action }}" == "deploy-backend" ]]; then
+            export FILE="overlays/${ENV}/patches/backend-deployment.yaml"
+          else
+            export FILE="overlays/${ENV}/patches/frontend-deployment.yaml"
+          fi
+          python3 << 'PY'
+          import os, re, pathlib
+          path = pathlib.Path(os.environ["FILE"])
+          img = os.environ["IMAGE"] + ":" + os.environ["TAG"]
+          text = path.read_text()
+          text = re.sub(r"^(\s*)image:\s.*$", r"\1image: " + img, text, flags=re.M)
+          path.write_text(text)
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add "$FILE"
+          git diff --staged --quiet || git commit -m "chore: image $(basename "$IMAGE"):${TAG} (${ENV})"
+          git push
+
+      - uses: digitalocean/action-doctl@v2
         with:
           token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
 
-      - name: Configure kubectl
-        run: doctl kubernetes cluster kubeconfig save ${{ env.DIGITALOCEAN_CLUSTER_NAME }}
+      - run: doctl kubernetes cluster kubeconfig save ${{ env.CLUSTER_NAME }}
 
-      - name: Setup kubectl
-        uses: azure/setup-kubectl@v4
+      - uses: azure/setup-kubectl@v4
 
-      - name: Apply manifests
+      - name: Apply to cluster
+        env:
+          ENV: ${{ github.event.client_payload.environment }}
         run: |
-          ENV="${{ github.event.client_payload.environment }}"
           kubectl kustomize overlays/${ENV} | kubectl apply -f -
-
-      - name: Wait for rollout
-        run: |
-          ENV="${{ github.event.client_payload.environment }}"
           NS="tianluai-${ENV}"
-          kubectl rollout status deployment/tianluai-api -n ${NS} --timeout=300s || true
-          kubectl rollout status deployment/tianluai-web -n ${NS} --timeout=300s || true
-          kubectl get ingress -n ${NS}
+          kubectl rollout status deployment/tianluai-api -n ${NS} --timeout=300s
+          kubectl rollout status deployment/tianluai-web -n ${NS} --timeout=300s
+
+  manual-deploy:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+      - run: doctl kubernetes cluster kubeconfig save ${{ env.CLUSTER_NAME }}
+      - uses: azure/setup-kubectl@v4
+      - run: kubectl kustomize overlays/${{ github.event.inputs.environment }} | kubectl apply -f -
+      - run: |
+          NS=tianluai-${{ github.event.inputs.environment }}
+          kubectl rollout status deployment/tianluai-api -n ${NS} --timeout=300s
+          kubectl rollout status deployment/tianluai-web -n ${NS} --timeout=300s

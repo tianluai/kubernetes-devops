@@ -8,7 +8,7 @@ spec:
     spec:
       containers:
         - name: web
-          image: tianluai/tianluai-web:develop
+          image: registry.digitalocean.com/tianluai/tianluai-web:latest
           resources:
             requests:
               cpu: 50m
