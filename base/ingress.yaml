@@ -9,6 +9,12 @@ metadata:
     nginx.ingress.kubernetes.io/proxy-body-size: "10m"
 spec:
   ingressClassName: nginx
+  # TLS: create Secret `tianluai-tls` in the namespace (see README — Cloudflare Origin CA or cert-manager).
+  tls:
+    - hosts:
+        - ai.tianlu.tech
+        - ai-api.tianlu.tech
+      secretName: tianluai-tls
   rules:
     - host: ai.tianlu.tech
       http:

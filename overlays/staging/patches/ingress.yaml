@@ -3,6 +3,11 @@ kind: Ingress
 metadata:
   name: tianluai-ingress
 spec:
+  tls:
+    - hosts:
+        - ai-staging.tianlu.tech
+        - ai-api-staging.tianlu.tech
+      secretName: tianluai-tls
   rules:
     - host: ai-staging.tianlu.tech
       http:

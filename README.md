@@ -11,6 +11,32 @@ NGINX Ingress (one DO Load Balancer) routes by host to `tianluai-web` and `tianl
 | prod        | `ai.tianlu.tech`         | `ai-api.tianlu.tech`         |
 | staging     | `ai-staging.tianlu.tech` | `ai-api-staging.tianlu.tech` |
 
+**DNS names must match the table.** In Cloudflare, point **`ai`**, **`ai-api`**, **`ai-staging`**, and **`ai-api-staging`** at the Ingress load balancer IP (FQDNs as in the table).
+
+### Cloudflare SSL (error 526) — free options
+
+Visitors hit **Cloudflare** (HTTPS, Universal SSL — free). Cloudflare then connects to your **origin** (the DO load balancer / NGINX Ingress). **Error 526** means Cloudflare is using **Full (strict)** and the origin is not presenting a certificate it trusts (often the Ingress default fake cert, or HTTP-only).
+
+You do **not** need to buy a certificate. Pick one:
+
+1. **Cloudflare Origin Certificate (simplest with orange-cloud proxy)** — free in Cloudflare: **SSL/TLS → Origin Server → Create certificate**. Include the hostnames for that environment (e.g. prod: `ai.tianlu.tech`, `ai-api.tianlu.tech`; staging: `ai-staging.tianlu.tech`, `ai-api-staging.tianlu.tech`). Save the PEM + private key, then create the Kubernetes secret the Ingress already references:
+
+   ```bash
+   kubectl create secret tls tianluai-tls \
+     --cert=origin.pem --key=origin.key \
+     -n tianluai-prod
+   # Staging (same cert if it lists staging hostnames too, or a second Origin cert):
+   kubectl create secret tls tianluai-tls \
+     --cert=origin-staging.pem --key=origin-staging.key \
+     -n tianluai-staging
+   ```
+
+   Re-apply manifests (or restart nothing if the Ingress already points at `tianluai-tls`). Keep **SSL/TLS mode** on **Full (strict)**.
+
+2. **cert-manager + Let’s Encrypt** — free public certificates on the cluster (often **HTTP-01** or **DNS-01** with a Cloudflare API token). More moving parts; good if you want automated renewal without Origin CA.
+
+3. **Temporary / not recommended long-term:** set Cloudflare **SSL/TLS** to **Full** (not *Full (strict)*). Cloudflare accepts the Ingress default/self-signed cert. No secret setup, but origin validation is weaker than (1) or (2).
+
 ## Layout
 
 ```
