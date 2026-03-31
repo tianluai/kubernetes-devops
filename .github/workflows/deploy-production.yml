@@ -1,23 +1,10 @@
-name: Deploy
+name: Deploy production
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "base/**"
-      - "overlays/**"
-      - ".github/workflows/**"
-      - "scripts/**"
-
   repository_dispatch:
     types: [deploy-backend, deploy-frontend]
 
   workflow_dispatch:
-    inputs:
-      environment:
-        required: true
-        type: choice
-        options: [staging, prod]
 
 permissions:
   contents: write
@@ -26,30 +13,16 @@ env:
   CLUSTER_NAME: tianlu-k8s
 
 concurrency:
-  group: ${{ github.event_name == 'repository_dispatch' && 'manifest-apply' || github.run_id }}
+  group: manifest-apply-prod
   cancel-in-progress: false
 
 jobs:
-  validate:
-    if: |
-      github.event_name == 'pull_request' ||
-      (github.event_name == 'push' && !contains(github.event.head_commit.message || '', '[skip ci]'))
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        env: [staging, prod]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: azure/setup-kubectl@v4
-      # kubectl apply --dry-run=client still talks to the API server for discovery; PR CI has no kubeconfig,
-      # so it falls back to localhost:8080 and fails. Rendering with kustomize is enough to validate overlays.
-      - name: Kustomize build
-        run: kubectl kustomize overlays/${{ matrix.env }} >/dev/null
-
   dispatch-deploy:
-    if: github.event_name == 'repository_dispatch'
+    if: |
+      github.event_name == 'repository_dispatch' &&
+      github.event.client_payload.environment == 'prod'
     runs-on: ubuntu-latest
-    environment: ${{ github.event.client_payload.environment }}
+    environment: prod
     env:
       ENV: ${{ github.event.client_payload.environment }}
     steps:
@@ -128,9 +101,9 @@ jobs:
   manual-deploy:
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    environment: ${{ github.event.inputs.environment }}
+    environment: prod
     env:
-      ENV: ${{ github.event.inputs.environment }}
+      ENV: prod
     steps:
       - uses: actions/checkout@v4
       - uses: digitalocean/action-doctl@v2

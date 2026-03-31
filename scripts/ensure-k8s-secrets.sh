@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Sync backend-secrets and frontend-secrets from GitHub Environment secrets (deploy.yml).
+# Sync backend-secrets and frontend-secrets from GitHub Environment secrets (deploy-production / deploy-staging workflows).
 # Required env: K8S_NAMESPACE, MONGODB_URI, CLERK_SECRET_KEY
 # Optional: SENTRY_DSN (empty = disabled in Nest)
 set -euo pipefail

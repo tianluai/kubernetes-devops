@@ -1,0 +1,147 @@
+name: Deploy staging
+
+on:
+  repository_dispatch:
+    types: [deploy-backend, deploy-frontend]
+
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  CLUSTER_NAME: tianlu-k8s
+
+concurrency:
+  group: manifest-apply-staging
+  cancel-in-progress: false
+
+jobs:
+  dispatch-deploy:
+    if: |
+      github.event_name == 'repository_dispatch' &&
+      github.event.client_payload.environment == 'staging'
+    runs-on: ubuntu-latest
+    environment: staging
+    env:
+      ENV: ${{ github.event.client_payload.environment }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GH_PAT_DEVOPS_TOKEN }}
+          fetch-depth: 0
+
+      - name: Update image in overlay
+        env:
+          ENV: ${{ github.event.client_payload.environment }}
+          IMAGE: ${{ github.event.client_payload.image }}
+          TAG: ${{ github.event.client_payload.tag }}
+        run: |
+          if [[ "${{ github.event.action }}" == "deploy-backend" ]]; then
+            export FILE="overlays/${ENV}/patches/backend-deployment.yaml"
+          else
+            export FILE="overlays/${ENV}/patches/frontend-deployment.yaml"
+          fi
+          python3 << 'PY'
+          import os, re, pathlib
+          path = pathlib.Path(os.environ["FILE"])
+          img = os.environ["IMAGE"] + ":" + os.environ["TAG"]
+          text = path.read_text()
+          text = re.sub(r"^(\s*)image:\s.*$", r"\1image: " + img, text, flags=re.M)
+          path.write_text(text)
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add "$FILE"
+          git diff --staged --quiet || git commit -m "chore: image $(basename "$IMAGE"):${TAG} (${ENV}) [skip ci]"
+          git push
+
+      - uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+
+      - run: doctl kubernetes cluster kubeconfig save ${{ env.CLUSTER_NAME }}
+
+      - uses: azure/setup-kubectl@v4
+
+      - name: Apply manifests (Kustomize)
+        run: kubectl kustomize overlays/${{ env.ENV }} | kubectl apply -f -
+
+      - name: Sync runtime secrets (GitHub Environment → cluster)
+        env:
+          K8S_NAMESPACE: tianluai-${{ env.ENV }}
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}
+          CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+        run: bash scripts/ensure-k8s-secrets.sh
+
+      - name: Rollout (pick up secrets + manifests)
+        run: |
+          NS="tianluai-${{ env.ENV }}"
+          kubectl rollout restart deployment/tianluai-api deployment/tianluai-web -n "${NS}"
+          if ! kubectl rollout status deployment/tianluai-api -n "${NS}" --timeout=300s; then
+            echo "::group::Debug: tianluai-api rollout failed"
+            kubectl get pods -n "${NS}" -o wide
+            kubectl get events -n "${NS}" --sort-by='.lastTimestamp' | tail -50
+            kubectl describe deployment/tianluai-api -n "${NS}"
+            kubectl logs -n "${NS}" -l app=tianluai-api --tail=120 --all-containers=true || true
+            echo "::endgroup::"
+            exit 1
+          fi
+          if ! kubectl rollout status deployment/tianluai-web -n "${NS}" --timeout=300s; then
+            echo "::group::Debug: tianluai-web rollout failed"
+            kubectl get pods -n "${NS}" -o wide
+            kubectl get events -n "${NS}" --sort-by='.lastTimestamp' | tail -50
+            kubectl describe deployment/tianluai-web -n "${NS}"
+            kubectl logs -n "${NS}" -l app=tianluai-web --tail=120 --all-containers=true || true
+            echo "::endgroup::"
+            exit 1
+          fi
+
+  manual-deploy:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    environment: staging
+    env:
+      ENV: staging
+    steps:
+      - uses: actions/checkout@v4
+      - uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+      - run: doctl kubernetes cluster kubeconfig save ${{ env.CLUSTER_NAME }}
+      - uses: azure/setup-kubectl@v4
+
+      - name: Apply manifests (Kustomize)
+        run: kubectl kustomize overlays/${{ env.ENV }} | kubectl apply -f -
+
+      - name: Sync runtime secrets (GitHub Environment → cluster)
+        env:
+          K8S_NAMESPACE: tianluai-${{ env.ENV }}
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}
+          CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+        run: bash scripts/ensure-k8s-secrets.sh
+
+      - name: Rollout (pick up secrets + manifests)
+        run: |
+          NS=tianluai-${{ env.ENV }}
+          kubectl rollout restart deployment/tianluai-api deployment/tianluai-web -n "${NS}"
+          if ! kubectl rollout status deployment/tianluai-api -n "${NS}" --timeout=300s; then
+            echo "::group::Debug: tianluai-api rollout failed"
+            kubectl get pods -n "${NS}" -o wide
+            kubectl get events -n "${NS}" --sort-by='.lastTimestamp' | tail -50
+            kubectl describe deployment/tianluai-api -n "${NS}"
+            kubectl logs -n "${NS}" -l app=tianluai-api --tail=120 --all-containers=true || true
+            echo "::endgroup::"
+            exit 1
+          fi
+          if ! kubectl rollout status deployment/tianluai-web -n "${NS}" --timeout=300s; then
+            echo "::group::Debug: tianluai-web rollout failed"
+            kubectl get pods -n "${NS}" -o wide
+            kubectl get events -n "${NS}" --sort-by='.lastTimestamp' | tail -50
+            kubectl describe deployment/tianluai-web -n "${NS}"
+            kubectl logs -n "${NS}" -l app=tianluai-web --tail=120 --all-containers=true || true
+            echo "::endgroup::"
+            exit 1
+          fi
