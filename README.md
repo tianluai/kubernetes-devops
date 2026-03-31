@@ -41,25 +41,42 @@ You do **not** need to buy a certificate. Pick one:
 
 ```
 .github/workflows/
-  deploy.yml        — validate on PR; apply on dispatch / manual; push to main on overlay changes
-  setup-cluster.yml — ingress-nginx, DOCR pull secret per namespace
+  ci.yml              — kustomize validate on PR/push
+  deploy-production.yml / deploy-staging.yml — apply on repository_dispatch or manual
+  setup-cluster.yml   — ingress-nginx, DOCR pull secret per namespace
 base/, overlays/{staging,prod}/
 ```
 
-**Secrets wiring (like `valueFrom.secretKeyRef`):** Deployments in **`base/`** list each sensitive env var explicitly — **`env[].valueFrom.secretKeyRef`** pointing at **`backend-secrets`** / **`frontend-secrets`**. Only **key names** and **secret names** live in git; **values** come from GitHub Environment secrets (see `deploy.yml` + `scripts/ensure-k8s-secrets.sh`) or from a local `kubectl apply` of `*-secrets.example.yaml` copies. Non-secret config stays in **ConfigMaps** (`envFrom`).
+**Secrets wiring (like `valueFrom.secretKeyRef`):** Deployments in **`base/`** list each sensitive env var explicitly — **`env[].valueFrom.secretKeyRef`** pointing at **`backend-secrets`** / **`frontend-secrets`**. Only **key names** and **secret names** live in git; **values** come from GitHub Environment secrets (see deploy workflows + `scripts/ensure-k8s-secrets.sh`) or from a local `kubectl apply` of `*-secrets.example.yaml` copies. Non-secret config stays in **ConfigMaps** (`envFrom`).
+
+### GitHub secrets: which repo needs what
+
+GitHub **does not share** secrets between repositories. **Do not** put tokens only in **kubernetes-devops** and expect **tianluai-web** / **tianluai_api** workflows to see them.
+
+| Secret | **kubernetes-devops** repo | **tianluai-web** / **tianluai_api** repos |
+|--------|----------------------------|-------------------------------------------|
+| **`GH_PAT_DEVOPS_TOKEN`** | Yes — workflows **commit** manifest updates back to this repo (`git push`). | Yes — workflows **call** `repository_dispatch` **into** this repo (needs `repo` scope on the PAT). Same token value is fine; **add the secret in each repo** (or per-repo Environment `prod` / `staging` on the app side). |
+| **`DIGITALOCEAN_ACCESS_TOKEN`** | Yes — `doctl` / `kubectl apply`. | Yes — `doctl registry login` when building and pushing images. |
+| **`DOCR_REGISTRY`** | **No** — image URLs are passed in the **dispatch payload** from app CI. | Yes — full registry prefix, e.g. `registry.digitalocean.com/your-registry-name` (no trailing slash). |
+| **`DOCR_REGISTRY_NAME`** | Yes — **Setup cluster** workflow only (registry slug for pull-secret manifest). | No. |
+| **`MONGODB_URI`**, **`CLERK_SECRET_KEY`**, **`SENTRY_DSN`** | Yes — **Environment** `staging` / `prod` — synced to cluster by `ensure-k8s-secrets.sh`. | Not in kubernetes-devops unless you duplicate for something else. |
+
+**App repos** (`tianluai-web`, `tianluai_api`): jobs that use **Environment** secrets (`build-check`, `docker`, `deploy`) must declare **`environment: prod`** or **`environment: staging`** (see those workflows). Otherwise `secrets.*` only resolves **repository** secrets, not Environment secrets.
+
+**Protection rules:** If an Environment has **required reviewers**, jobs that set `environment:` on that Environment will wait for approval before continuing.
 
 ## One-time setup
 
 1. **DO**: Kubernetes cluster (name matches `CLUSTER_NAME` in workflows, default `tianlu-k8s`), Container Registry (slug matches image prefix, e.g. `registry.digitalocean.com/<slug>/…`).
 2. **GitHub Actions → Setup cluster**: run `install-ingress`, then `docr-pull-secret` (or `full`). Point DNS A records at the Ingress external IP.
-3. **Secrets (CI / cluster)**
+3. **Secrets (CI / cluster)** — see **“GitHub secrets: which repo needs what”** above.
    - **kubernetes-devops (repo):** `DIGITALOCEAN_ACCESS_TOKEN`, `GH_PAT_DEVOPS_TOKEN` (write, for manifest commits), `DOCR_REGISTRY_NAME` (for `doctl registry kubernetes-manifest` in setup).
-   - **GitHub Environments** `staging` / `prod` — **`MONGODB_URI`**, **`CLERK_SECRET_KEY`**, optional **`SENTRY_DSN`**. The **`deploy.yml`** job (`dispatch-deploy` / `manual-deploy`) runs **`scripts/ensure-k8s-secrets.sh`** so every deploy syncs **`backend-secrets`** and **`frontend-secrets`** in the cluster — no plaintext secrets in git.
+   - **GitHub Environments** `staging` / `prod` **on this repo** — **`MONGODB_URI`**, **`CLERK_SECRET_KEY`**, optional **`SENTRY_DSN`**. **`deploy-production.yml`** / **`deploy-staging.yml`** run **`scripts/ensure-k8s-secrets.sh`** so every deploy syncs **`backend-secrets`** and **`frontend-secrets`** in the cluster — no plaintext secrets in git.
    - **Templates in repo:** `overlays/{staging,prod}/*-secrets.example.yaml` are **committed** (placeholders only). New developers use them as the shape of the Secret; **filled** files should be named `*-secrets.local.yaml` (see `.gitignore`) and **never committed**. Prefer **GitHub Environment secrets** + pipeline; use local apply only for emergencies.
-   - **App repos (tianluai_api / tianluai-web):** `DIGITALOCEAN_ACCESS_TOKEN`, `DOCR_REGISTRY`, `GH_PAT_DEVOPS_TOKEN` for CI and `repository_dispatch` to kubernetes-devops. **tianluai-web** also uses `NEXT_PUBLIC_SENTRY_DSN` and optional `SENTRY_ORG`, `SENTRY_PROJECT`, `SENTRY_AUTH_TOKEN` at **Docker build** (repository secrets).
+   - **App repos (tianluai_api / tianluai-web):** configure **`DIGITALOCEAN_ACCESS_TOKEN`**, **`DOCR_REGISTRY`**, **`GH_PAT_DEVOPS_TOKEN`** **in each app repo** (repository or Environment secrets + `environment:` on jobs). **tianluai-web** also needs **`NEXT_PUBLIC_*`**, Sentry build args, etc., at **Docker build** time.
 4. **Sentry (Next.js):** `NEXT_PUBLIC_SENTRY_DSN` and optional `SENTRY_ORG`, `SENTRY_PROJECT`, `SENTRY_AUTH_TOKEN` are **build-time** in tianluai-web (Docker `ARG` / CI `build-args`), not injected by kubernetes-devops at deploy — the client bundle is baked when the image is built.
 5. **Frontend:** `NEXT_PUBLIC_*` is baked at image build time in tianluai-web; the web pod’s server-side Clerk key is mounted via **`frontend-secrets`** (same value as the API if you use one Clerk app).
-6. **Where secrets live (mental model):** **GitHub Environment secrets** → **`deploy.yml`** → Kubernetes **`Secret`** objects. Kustomize manifests **do not** embed secret values.
+6. **Where cluster runtime secrets live (mental model):** **GitHub Environment secrets** on **kubernetes-devops** → deploy workflows → **`ensure-k8s-secrets.sh`** → Kubernetes **`Secret`** objects. Kustomize manifests **do not** embed secret values.
 
 ## New developer (runtime secrets)
 
