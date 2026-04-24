@@ -5,6 +5,5 @@ metadata:
 data:
   NODE_ENV: "production"
   PORT: "3000"
-  NEXT_PUBLIC_CLERK_PROXY_URL: "https://clerk.ai.tianlu.tech"
-  NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: "pk_live_Y2xlcmsuYWkudGlhbmx1LnRlY2gk"
+  AUTH_URL: "https://ai.tianlu.tech"
   NEXT_PUBLIC_API_URL: "https://ai-api.tianlu.tech"

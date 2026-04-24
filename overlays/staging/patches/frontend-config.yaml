@@ -5,6 +5,5 @@ metadata:
 data:
   NODE_ENV: "staging"
   PORT: "3000"
+  AUTH_URL: "https://ai-staging.tianlu.tech"
   NEXT_PUBLIC_API_URL: "https://ai-api-staging.tianlu.tech"
-  NEXT_PUBLIC_CLERK_PROXY_URL: "https://clerk.ai.tianlu.tech"
-  NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: "pk_test_Y2hhcm1pbmctcGlyYW5oYS0yOS5jbGVyay5hY2NvdW50cy5kZXYk"

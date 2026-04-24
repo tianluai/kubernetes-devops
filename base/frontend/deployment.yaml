@@ -27,11 +27,26 @@ spec:
             - configMapRef:
                 name: frontend-config
           env:
-            - name: CLERK_SECRET_KEY
+            - name: AUTH_SECRET
               valueFrom:
                 secretKeyRef:
                   name: frontend-secrets
-                  key: CLERK_SECRET_KEY
+                  key: AUTH_SECRET
+            - name: AUTH_GOOGLE_ID
+              valueFrom:
+                secretKeyRef:
+                  name: frontend-secrets
+                  key: AUTH_GOOGLE_ID
+            - name: AUTH_GOOGLE_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: frontend-secrets
+                  key: AUTH_GOOGLE_SECRET
+            - name: AUTH_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: frontend-secrets
+                  key: AUTH_JWT_SECRET
           resources:
             requests:
               cpu: 100m

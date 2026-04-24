@@ -71,7 +71,10 @@ jobs:
         env:
           K8S_NAMESPACE: tianluai-${{ env.ENV }}
           MONGODB_URI: ${{ secrets.MONGODB_URI }}
-          CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
+          AUTH_JWT_SECRET: ${{ secrets.AUTH_JWT_SECRET }}
+          AUTH_SECRET: ${{ secrets.AUTH_SECRET }}
+          AUTH_GOOGLE_ID: ${{ secrets.AUTH_GOOGLE_ID }}
+          AUTH_GOOGLE_SECRET: ${{ secrets.AUTH_GOOGLE_SECRET }}
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
         run: bash scripts/ensure-k8s-secrets.sh
 
@@ -119,7 +122,10 @@ jobs:
         env:
           K8S_NAMESPACE: tianluai-${{ env.ENV }}
           MONGODB_URI: ${{ secrets.MONGODB_URI }}
-          CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
+          AUTH_JWT_SECRET: ${{ secrets.AUTH_JWT_SECRET }}
+          AUTH_SECRET: ${{ secrets.AUTH_SECRET }}
+          AUTH_GOOGLE_ID: ${{ secrets.AUTH_GOOGLE_ID }}
+          AUTH_GOOGLE_SECRET: ${{ secrets.AUTH_GOOGLE_SECRET }}
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
         run: bash scripts/ensure-k8s-secrets.sh
 

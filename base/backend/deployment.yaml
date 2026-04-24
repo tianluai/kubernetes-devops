@@ -33,11 +33,11 @@ spec:
                 secretKeyRef:
                   name: backend-secrets
                   key: MONGODB_URI
-            - name: CLERK_SECRET_KEY
+            - name: AUTH_JWT_SECRET
               valueFrom:
                 secretKeyRef:
                   name: backend-secrets
-                  key: CLERK_SECRET_KEY
+                  key: AUTH_JWT_SECRET
             - name: SENTRY_DSN
               valueFrom:
                 secretKeyRef:
