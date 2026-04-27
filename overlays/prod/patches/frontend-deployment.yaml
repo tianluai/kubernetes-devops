@@ -16,7 +16,9 @@ spec:
           image: registry.digitalocean.com/tianluai/tianluai-web:0.1.33
           command: ["node"]
           args: ["server.js"]
+          # $patch: replace — base may still define httpGet probes; merging would leave both httpGet + tcpSocket (invalid).
           readinessProbe:
+            $patch: replace
             tcpSocket:
               port: 3000
             initialDelaySeconds: 20
@@ -24,6 +26,7 @@ spec:
             periodSeconds: 10
             failureThreshold: 6
           livenessProbe:
+            $patch: replace
             tcpSocket:
               port: 3000
             initialDelaySeconds: 45
