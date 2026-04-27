@@ -20,6 +20,8 @@ spec:
       containers:
         - name: web
           image: registry.digitalocean.com/tianluai/tianluai-web:latest
+          command: ["node"]
+          args: ["server.js"]
           ports:
             - containerPort: 3000
               protocol: TCP
@@ -55,16 +57,18 @@ spec:
               cpu: 500m
               memory: 512Mi
           readinessProbe:
-            httpGet:
-              path: /
+            tcpSocket:
               port: 3000
-            initialDelaySeconds: 10
+            initialDelaySeconds: 20
+            timeoutSeconds: 5
             periodSeconds: 10
+            failureThreshold: 6
           livenessProbe:
-            httpGet:
-              path: /
+            tcpSocket:
               port: 3000
-            initialDelaySeconds: 15
+            initialDelaySeconds: 45
+            timeoutSeconds: 5
             periodSeconds: 20
+            failureThreshold: 6
       imagePullSecrets:
         - name: registry-tianluai
