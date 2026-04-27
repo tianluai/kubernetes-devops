@@ -7,6 +7,9 @@ metadata:
     app.kubernetes.io/part-of: tianluai
   annotations:
     nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    # NextAuth + middleware can send larger response headers; default buffers cause 502 "upstream sent too big header".
+    nginx.ingress.kubernetes.io/proxy-buffer-size: "32k"
+    nginx.ingress.kubernetes.io/proxy-buffers-number: "8"
 spec:
   ingressClassName: nginx
   # TLS: create Secret `tianluai-tls` in the namespace (see README — Cloudflare Origin CA or cert-manager).
