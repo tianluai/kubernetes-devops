@@ -6,4 +6,5 @@ data:
   NODE_ENV: "production"
   PORT: "3000"
   AUTH_URL: "https://ai.tianlu.tech"
+  NEXTAUTH_URL_INTERNAL: "http://tianluai-web"
   NEXT_PUBLIC_API_URL: "https://ai-api.tianlu.tech"
