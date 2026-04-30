@@ -8,7 +8,7 @@ spec:
     type: RollingUpdate
     rollingUpdate:
       maxSurge: 1
-      maxUnavailable: 1
+      maxUnavailable: 0
   template:
     spec:
       containers:
@@ -19,7 +19,8 @@ spec:
           # $patch: replace — base may still define httpGet probes; merging would leave both httpGet + tcpSocket (invalid).
           readinessProbe:
             $patch: replace
-            tcpSocket:
+            httpGet:
+              path: /api/health
               port: 3000
             initialDelaySeconds: 20
             timeoutSeconds: 5
