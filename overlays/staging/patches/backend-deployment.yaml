@@ -4,12 +4,12 @@ metadata:
   name: tianluai-api
 spec:
   replicas: 1
-  # Single-node / tight CPU: never run two API pods during a rollout (avoids 2× scheduling).
+  # maxUnavailable 0 + maxSurge 1: keep a ready endpoint during rollout (brief 2-pod overlap needs CPU/RAM headroom).
   strategy:
     type: RollingUpdate
     rollingUpdate:
-      maxSurge: 0
-      maxUnavailable: 1
+      maxSurge: 1
+      maxUnavailable: 0
   template:
     spec:
       containers:

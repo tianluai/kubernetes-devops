@@ -89,6 +89,10 @@ jobs:
             kubectl describe deployment/tianluai-api -n "${NS}"
             kubectl logs -n "${NS}" -l app=tianluai-api --tail=120 --all-containers=true || true
             echo "::endgroup::"
+            echo "::group::Rolling back tianluai-api to previous ReplicaSet"
+            kubectl rollout undo deployment/tianluai-api -n "${NS}" || true
+            kubectl rollout status deployment/tianluai-api -n "${NS}" --timeout=180s || true
+            echo "::endgroup::"
             exit 1
           fi
           if ! kubectl rollout status deployment/tianluai-web -n "${NS}" --timeout=300s; then
@@ -97,6 +101,10 @@ jobs:
             kubectl get events -n "${NS}" --sort-by='.lastTimestamp' | tail -50
             kubectl describe deployment/tianluai-web -n "${NS}"
             kubectl logs -n "${NS}" -l app=tianluai-web --tail=120 --all-containers=true || true
+            echo "::endgroup::"
+            echo "::group::Rolling back tianluai-web to previous ReplicaSet"
+            kubectl rollout undo deployment/tianluai-web -n "${NS}" || true
+            kubectl rollout status deployment/tianluai-web -n "${NS}" --timeout=180s || true
             echo "::endgroup::"
             exit 1
           fi
@@ -140,6 +148,10 @@ jobs:
             kubectl describe deployment/tianluai-api -n "${NS}"
             kubectl logs -n "${NS}" -l app=tianluai-api --tail=120 --all-containers=true || true
             echo "::endgroup::"
+            echo "::group::Rolling back tianluai-api to previous ReplicaSet"
+            kubectl rollout undo deployment/tianluai-api -n "${NS}" || true
+            kubectl rollout status deployment/tianluai-api -n "${NS}" --timeout=180s || true
+            echo "::endgroup::"
             exit 1
           fi
           if ! kubectl rollout status deployment/tianluai-web -n "${NS}" --timeout=300s; then
@@ -148,6 +160,10 @@ jobs:
             kubectl get events -n "${NS}" --sort-by='.lastTimestamp' | tail -50
             kubectl describe deployment/tianluai-web -n "${NS}"
             kubectl logs -n "${NS}" -l app=tianluai-web --tail=120 --all-containers=true || true
+            echo "::endgroup::"
+            echo "::group::Rolling back tianluai-web to previous ReplicaSet"
+            kubectl rollout undo deployment/tianluai-web -n "${NS}" || true
+            kubectl rollout status deployment/tianluai-web -n "${NS}" --timeout=180s || true
             echo "::endgroup::"
             exit 1
           fi
