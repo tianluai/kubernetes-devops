@@ -15,6 +15,31 @@ spec:
       containers:
         - name: api
           image: registry.digitalocean.com/tianluai/tianluai-api:0.0.43
+          # Repeat secret env wiring here so prod applies never ship a Deployment without it
+          # (older clusters / partial applies can otherwise miss base-only keys and crash-loop:
+          # CredentialsCryptoService requires CREDENTIALS_ENCRYPTION_KEYS).
+          env:
+            - name: MONGODB_URI
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secrets
+                  key: MONGODB_URI
+            - name: AUTH_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secrets
+                  key: AUTH_JWT_SECRET
+            - name: SENTRY_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secrets
+                  key: SENTRY_DSN
+                  optional: true
+            - name: CREDENTIALS_ENCRYPTION_KEYS
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secrets
+                  key: CREDENTIALS_ENCRYPTION_KEYS
           resources:
             requests:
               cpu: 50m
