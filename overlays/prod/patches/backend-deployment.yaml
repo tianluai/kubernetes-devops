@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: api
-          image: registry.digitalocean.com/tianluai/tianluai-api:0.0.44
+          image: registry.digitalocean.com/tianluai/tianluai-api:0.0.45
           resources:
             requests:
               cpu: 50m
