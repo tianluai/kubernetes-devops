@@ -3,18 +3,43 @@ kind: Deployment
 metadata:
   name: tianluai-api
 spec:
-  # Single small node: keep 1 replica; raise after adding nodes / larger pool
+  # replicas: raise to 2+ for HA when the pool allows. Rollouts use surge 1 — brief 2-pod overlap per deployment.
   replicas: 1
   strategy:
     type: RollingUpdate
     rollingUpdate:
       maxSurge: 1
-      maxUnavailable: 1
+      maxUnavailable: 0
   template:
     spec:
       containers:
         - name: api
           image: registry.digitalocean.com/tianluai/tianluai-api:0.0.45
+          # Repeat secret env wiring here so prod applies never ship a Deployment without it
+          # (older clusters / partial applies can otherwise miss base-only keys and crash-loop:
+          # CredentialsCryptoService requires CREDENTIALS_ENCRYPTION_KEYS).
+          env:
+            - name: MONGODB_URI
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secrets
+                  key: MONGODB_URI
+            - name: AUTH_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secrets
+                  key: AUTH_JWT_SECRET
+            - name: SENTRY_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secrets
+                  key: SENTRY_DSN
+                  optional: true
+            - name: CREDENTIALS_ENCRYPTION_KEYS
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secrets
+                  key: CREDENTIALS_ENCRYPTION_KEYS
           resources:
             requests:
               cpu: 50m

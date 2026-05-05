@@ -67,6 +67,11 @@ jobs:
       - name: Apply manifests (Kustomize)
         run: kubectl kustomize overlays/${{ env.ENV }} | kubectl apply -f -
 
+      - name: Assert live API Deployment mounts CREDENTIALS_ENCRYPTION_KEYS
+        env:
+          K8S_NAMESPACE: tianluai-${{ env.ENV }}
+        run: bash scripts/assert-api-deployment-has-credentials-env.sh
+
       - name: Sync runtime secrets (GitHub Environment → cluster)
         env:
           K8S_NAMESPACE: tianluai-${{ env.ENV }}
@@ -76,6 +81,7 @@ jobs:
           AUTH_GOOGLE_ID: ${{ secrets.AUTH_GOOGLE_ID }}
           AUTH_GOOGLE_SECRET: ${{ secrets.AUTH_GOOGLE_SECRET }}
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          CREDENTIALS_ENCRYPTION_KEYS: ${{ secrets.CREDENTIALS_ENCRYPTION_KEYS }}
         run: bash scripts/ensure-k8s-secrets.sh
 
       - name: Rollout (pick up secrets + manifests)
@@ -89,6 +95,10 @@ jobs:
             kubectl describe deployment/tianluai-api -n "${NS}"
             kubectl logs -n "${NS}" -l app=tianluai-api --tail=120 --all-containers=true || true
             echo "::endgroup::"
+            echo "::group::Rolling back tianluai-api to previous ReplicaSet"
+            kubectl rollout undo deployment/tianluai-api -n "${NS}" || true
+            kubectl rollout status deployment/tianluai-api -n "${NS}" --timeout=180s || true
+            echo "::endgroup::"
             exit 1
           fi
           if ! kubectl rollout status deployment/tianluai-web -n "${NS}" --timeout=300s; then
@@ -97,6 +107,10 @@ jobs:
             kubectl get events -n "${NS}" --sort-by='.lastTimestamp' | tail -50
             kubectl describe deployment/tianluai-web -n "${NS}"
             kubectl logs -n "${NS}" -l app=tianluai-web --tail=120 --all-containers=true || true
+            echo "::endgroup::"
+            echo "::group::Rolling back tianluai-web to previous ReplicaSet"
+            kubectl rollout undo deployment/tianluai-web -n "${NS}" || true
+            kubectl rollout status deployment/tianluai-web -n "${NS}" --timeout=180s || true
             echo "::endgroup::"
             exit 1
           fi
@@ -118,6 +132,11 @@ jobs:
       - name: Apply manifests (Kustomize)
         run: kubectl kustomize overlays/${{ env.ENV }} | kubectl apply -f -
 
+      - name: Assert live API Deployment mounts CREDENTIALS_ENCRYPTION_KEYS
+        env:
+          K8S_NAMESPACE: tianluai-${{ env.ENV }}
+        run: bash scripts/assert-api-deployment-has-credentials-env.sh
+
       - name: Sync runtime secrets (GitHub Environment → cluster)
         env:
           K8S_NAMESPACE: tianluai-${{ env.ENV }}
@@ -127,6 +146,7 @@ jobs:
           AUTH_GOOGLE_ID: ${{ secrets.AUTH_GOOGLE_ID }}
           AUTH_GOOGLE_SECRET: ${{ secrets.AUTH_GOOGLE_SECRET }}
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          CREDENTIALS_ENCRYPTION_KEYS: ${{ secrets.CREDENTIALS_ENCRYPTION_KEYS }}
         run: bash scripts/ensure-k8s-secrets.sh
 
       - name: Rollout (pick up secrets + manifests)
@@ -140,6 +160,10 @@ jobs:
             kubectl describe deployment/tianluai-api -n "${NS}"
             kubectl logs -n "${NS}" -l app=tianluai-api --tail=120 --all-containers=true || true
             echo "::endgroup::"
+            echo "::group::Rolling back tianluai-api to previous ReplicaSet"
+            kubectl rollout undo deployment/tianluai-api -n "${NS}" || true
+            kubectl rollout status deployment/tianluai-api -n "${NS}" --timeout=180s || true
+            echo "::endgroup::"
             exit 1
           fi
           if ! kubectl rollout status deployment/tianluai-web -n "${NS}" --timeout=300s; then
@@ -148,6 +172,10 @@ jobs:
             kubectl get events -n "${NS}" --sort-by='.lastTimestamp' | tail -50
             kubectl describe deployment/tianluai-web -n "${NS}"
             kubectl logs -n "${NS}" -l app=tianluai-web --tail=120 --all-containers=true || true
+            echo "::endgroup::"
+            echo "::group::Rolling back tianluai-web to previous ReplicaSet"
+            kubectl rollout undo deployment/tianluai-web -n "${NS}" || true
+            kubectl rollout status deployment/tianluai-web -n "${NS}" --timeout=180s || true
             echo "::endgroup::"
             exit 1
           fi

@@ -4,17 +4,41 @@ metadata:
   name: tianluai-api
 spec:
   replicas: 1
-  # Single-node / tight CPU: never run two API pods during a rollout (avoids 2× scheduling).
+  # maxUnavailable 0 + maxSurge 1: keep a ready endpoint during rollout (brief 2-pod overlap needs CPU/RAM headroom).
   strategy:
     type: RollingUpdate
     rollingUpdate:
-      maxSurge: 0
-      maxUnavailable: 1
+      maxSurge: 1
+      maxUnavailable: 0
   template:
     spec:
       containers:
         - name: api
           image: registry.digitalocean.com/tianluai/tianluai-api:latest
+          # Keep secret env wiring in the overlay so applies always include CREDENTIALS_ENCRYPTION_KEYS
+          # (API crash-loops without it — CredentialsCryptoService fails onModuleInit).
+          env:
+            - name: MONGODB_URI
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secrets
+                  key: MONGODB_URI
+            - name: AUTH_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secrets
+                  key: AUTH_JWT_SECRET
+            - name: SENTRY_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secrets
+                  key: SENTRY_DSN
+                  optional: true
+            - name: CREDENTIALS_ENCRYPTION_KEYS
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secrets
+                  key: CREDENTIALS_ENCRYPTION_KEYS
           resources:
             requests:
               cpu: 50m

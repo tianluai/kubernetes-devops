@@ -2,6 +2,29 @@
 
 Kustomize manifests and GitHub Actions for Tianlu AI on DigitalOcean Kubernetes (DOKS). App repos build images, push to **DigitalOcean Container Registry (DOCR)**, and send `repository_dispatch` here; this repo updates overlay image tags and applies manifests.
 
+## Troubleshooting
+
+### API pod `CrashLoopBackOff` / readiness `connection refused` on `:3001`
+
+The API must receive **`CREDENTIALS_ENCRYPTION_KEYS`** from **`backend-secrets`** (see [Workspace API keys](#workspace-api-keys-encrypted-credentials)). If the **Deployment** omits that `env` entry, Nest exits during bootstrap and never listens on **3001**, so probes and `curl https://ai-api…/health` fail (and the frontend sees CORS or network errors).
+
+1. **Inspect the live spec:**  
+   `kubectl describe deployment tianluai-api -n tianluai-prod`  
+   Under **Environment**, confirm **`CREDENTIALS_ENCRYPTION_KEYS`** references **`backend-secrets`**. If you only see three secret keys (`MONGODB_URI`, `AUTH_JWT_SECRET`, `SENTRY_DSN`), the cluster Deployment is **behind git** — apply manifests from **kubernetes-devops** `main`, then restart (see below).
+
+2. **Re-apply manifests from this repo** (a plain `kubectl rollout restart` alone does not add missing env keys):  
+   `kubectl kustomize overlays/prod | kubectl apply -f -`  
+   Run your usual **`ensure-k8s-secrets.sh`** step (or the full Deploy workflow), then  
+   `kubectl rollout restart deployment/tianluai-api -n tianluai-prod`.
+
+3. **Logs:**  
+   `kubectl logs -n tianluai-prod -l app=tianluai-api --tail=200`  
+   **`Bootstrap failed: ... CREDENTIALS_ENCRYPTION_KEYS must be set`** means the env var is missing, empty, or invalid in the pod (often the **GitHub Environment secret** on **this repo** is unset, whitespace-only, or wrong).
+
+4. **Sync from GitHub (`kubernetes-devops`):** Under **Settings → Environments → prod** (or **staging**), add **`CREDENTIALS_ENCRYPTION_KEYS`** with value **`v1:`** followed by **`openssl rand -base64 32`** (same string as **`tianluai_api`** `.env`; no stray spaces/newlines). Re-run **Deploy production** so **`scripts/ensure-k8s-secrets.sh`** refreshes **`backend-secrets`**, then restart the API Deployment.
+
+**Rollout undo:** A failed Deploy workflow may run **`kubectl rollout undo`**, which can restore an **older** ReplicaSet that predates encryption-key wiring. Fix the Deployment and Secret, then deploy forward again.
+
 ## Traffic
 
 NGINX Ingress (one DO Load Balancer) routes by host to `tianluai-web` and `tianluai-api` (`ClusterIP`).
@@ -60,6 +83,7 @@ GitHub **does not share** secrets between repositories. **Do not** put tokens on
 | **`DOCR_REGISTRY`** | **No** — image URLs are passed in the **dispatch payload** from app CI. | Yes — full registry prefix, e.g. `registry.digitalocean.com/your-registry-name` (no trailing slash). |
 | **`DOCR_REGISTRY_NAME`** | Yes — **Setup cluster** workflow only (registry slug for pull-secret manifest). | No. |
 | **`MONGODB_URI`**, **`CLERK_SECRET_KEY`**, **`SENTRY_DSN`** | Yes — **Environment** `staging` / `prod` — synced to cluster by `ensure-k8s-secrets.sh`. | Not in kubernetes-devops unless you duplicate for something else. |
+| **`CREDENTIALS_ENCRYPTION_KEYS`** | Yes — same Environments — synced to **`backend-secrets`** (see [Workspace API keys](#workspace-api-keys-encrypted-credentials)). | **tianluai_api** only: add **also** as a **repository** secret (same value as here is fine) so CI **`test`** can run; pods still read the key from the cluster Secret — not from the app repo at runtime. |
 
 **App repos** (`tianluai-web`, `tianluai_api`): jobs that use **Environment** secrets (`build-check`, `docker`, `deploy`) must declare **`environment: prod`** or **`environment: staging`** (see those workflows). Otherwise `secrets.*` only resolves **repository** secrets, not Environment secrets.
 
@@ -71,12 +95,20 @@ GitHub **does not share** secrets between repositories. **Do not** put tokens on
 2. **GitHub Actions → Setup cluster**: run `install-ingress`, then `docr-pull-secret` (or `full`). Point DNS A records at the Ingress external IP.
 3. **Secrets (CI / cluster)** — see **“GitHub secrets: which repo needs what”** above.
    - **kubernetes-devops (repo):** `DIGITALOCEAN_ACCESS_TOKEN`, `GH_PAT_DEVOPS_TOKEN` (write, for manifest commits), `DOCR_REGISTRY_NAME` (for `doctl registry kubernetes-manifest` in setup).
-   - **GitHub Environments** `staging` / `prod` **on this repo** — **`MONGODB_URI`**, **`CLERK_SECRET_KEY`**, optional **`SENTRY_DSN`**. **`deploy-production.yml`** / **`deploy-staging.yml`** run **`scripts/ensure-k8s-secrets.sh`** so every deploy syncs **`backend-secrets`** and **`frontend-secrets`** in the cluster — no plaintext secrets in git.
+   - **GitHub Environments** `staging` / `prod` **on this repo** — **`MONGODB_URI`**, **`CLERK_SECRET_KEY`**, optional **`SENTRY_DSN`**, **`CREDENTIALS_ENCRYPTION_KEYS`** (see [Workspace API keys](#workspace-api-keys-encrypted-credentials) below). **`deploy-production.yml`** / **`deploy-staging.yml`** run **`scripts/ensure-k8s-secrets.sh`** so every deploy syncs **`backend-secrets`** and **`frontend-secrets`** in the cluster — no plaintext secrets in git.
    - **Templates in repo:** `overlays/{staging,prod}/*-secrets.example.yaml` are **committed** (placeholders only). New developers use them as the shape of the Secret; **filled** files should be named `*-secrets.local.yaml` (see `.gitignore`) and **never committed**. Prefer **GitHub Environment secrets** + pipeline; use local apply only for emergencies.
    - **App repos (tianluai_api / tianluai-web):** configure **`DIGITALOCEAN_ACCESS_TOKEN`**, **`DOCR_REGISTRY`**, **`GH_PAT_DEVOPS_TOKEN`** **in each app repo** (repository or Environment secrets + `environment:` on jobs). **tianluai-web** also needs **`NEXT_PUBLIC_*`**, Sentry build args, etc., at **Docker build** time.
 4. **Sentry (Next.js):** `NEXT_PUBLIC_SENTRY_DSN` and optional `SENTRY_ORG`, `SENTRY_PROJECT`, `SENTRY_AUTH_TOKEN` are **build-time** in tianluai-web (Docker `ARG` / CI `build-args`), not injected by kubernetes-devops at deploy — the client bundle is baked when the image is built.
 5. **Frontend:** `NEXT_PUBLIC_*` is baked at image build time in tianluai-web; the web pod’s server-side Clerk key is mounted via **`frontend-secrets`** (same value as the API if you use one Clerk app).
 6. **Where cluster runtime secrets live (mental model):** **GitHub Environment secrets** on **kubernetes-devops** → deploy workflows → **`ensure-k8s-secrets.sh`** → Kubernetes **`Secret`** objects. Kustomize manifests **do not** embed secret values.
+
+## Workspace API keys (encrypted credentials)
+
+Workspace-scoped OpenAI, Pinecone, and Notion keys are stored in MongoDB as **AES-256-GCM** ciphertext. The server needs **`CREDENTIALS_ENCRYPTION_KEYS`** in **`backend-secrets`** (same format as local `.env` in **tianluai_api**).
+
+- **Format:** comma-separated `v1:<base64-32-bytes>,v2:<base64-32-bytes>`. **Active key** = last entry (used for new encryptions). Keep older versions listed until all rows are re-encrypted.
+- **Generate a key:** `openssl rand -base64 32`, then prefix with a version label, e.g. `v2:paste_here`.
+- **Rotation:** (1) Append the new `vN:...` pair to **`CREDENTIALS_ENCRYPTION_KEYS`** in GitHub Environment + cluster secret. (2) Restart/redeploy the API. New credentials encrypt with the new key; old rows still decrypt. (3) From **tianluai_api**, run **`pnpm rotate-credentials`** against production MongoDB (with **`MONGODB_URI`** and the full multi-version key string) to re-encrypt every row to the active key. Use **`pnpm rotate-credentials -- --dry-run`** first. (4) After verifying, you may remove retired key versions from env only if no ciphertext still references them.
 
 ## New developer (runtime secrets)
 

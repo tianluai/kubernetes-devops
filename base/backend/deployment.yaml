@@ -44,6 +44,11 @@ spec:
                   name: backend-secrets
                   key: SENTRY_DSN
                   optional: true
+            - name: CREDENTIALS_ENCRYPTION_KEYS
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secrets
+                  key: CREDENTIALS_ENCRYPTION_KEYS
           resources:
             requests:
               cpu: 100m
