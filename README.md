@@ -10,7 +10,7 @@ The API must receive **`CREDENTIALS_ENCRYPTION_KEYS`** from **`backend-secrets`*
 
 1. **Inspect the live spec:**  
    `kubectl describe deployment tianluai-api -n tianluai-prod`  
-   Under **Environment**, confirm **`CREDENTIALS_ENCRYPTION_KEYS`** references **`backend-secrets`**.
+   Under **Environment**, confirm **`CREDENTIALS_ENCRYPTION_KEYS`** references **`backend-secrets`**. If you only see three secret keys (`MONGODB_URI`, `AUTH_JWT_SECRET`, `SENTRY_DSN`), the cluster Deployment is **behind git** — apply manifests from **kubernetes-devops** `main`, then restart (see below).
 
 2. **Re-apply manifests from this repo** (a plain `kubectl rollout restart` alone does not add missing env keys):  
    `kubectl kustomize overlays/prod | kubectl apply -f -`  

@@ -33,3 +33,7 @@ jobs:
       - uses: azure/setup-kubectl@v4
       - name: Kustomize build
         run: kubectl kustomize overlays/${{ matrix.env }} >/dev/null
+      - name: Rendered manifest includes API CREDENTIALS_ENCRYPTION_KEYS wiring
+        run: |
+          kubectl kustomize overlays/${{ matrix.env }} | grep -Fq 'name: CREDENTIALS_ENCRYPTION_KEYS' ||
+            (echo "::error::tianluai-api must declare env CREDENTIALS_ENCRYPTION_KEYS (see base/backend/deployment.yaml and overlays/*/patches/backend-deployment.yaml)" && exit 1)

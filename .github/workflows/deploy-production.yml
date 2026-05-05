@@ -67,6 +67,11 @@ jobs:
       - name: Apply manifests (Kustomize)
         run: kubectl kustomize overlays/${{ env.ENV }} | kubectl apply -f -
 
+      - name: Assert live API Deployment mounts CREDENTIALS_ENCRYPTION_KEYS
+        env:
+          K8S_NAMESPACE: tianluai-${{ env.ENV }}
+        run: bash scripts/assert-api-deployment-has-credentials-env.sh
+
       - name: Sync runtime secrets (GitHub Environment → cluster)
         env:
           K8S_NAMESPACE: tianluai-${{ env.ENV }}
@@ -126,6 +131,11 @@ jobs:
 
       - name: Apply manifests (Kustomize)
         run: kubectl kustomize overlays/${{ env.ENV }} | kubectl apply -f -
+
+      - name: Assert live API Deployment mounts CREDENTIALS_ENCRYPTION_KEYS
+        env:
+          K8S_NAMESPACE: tianluai-${{ env.ENV }}
+        run: bash scripts/assert-api-deployment-has-credentials-env.sh
 
       - name: Sync runtime secrets (GitHub Environment → cluster)
         env:
