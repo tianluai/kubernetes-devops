@@ -49,6 +49,13 @@ spec:
                 secretKeyRef:
                   name: backend-secrets
                   key: CREDENTIALS_ENCRYPTION_KEYS
+            # Required for Telegram long-polling when NODE_ENV=production (see tianluai_api TelegramBotService).
+            - name: TELEGRAM_ALLOWED_CHAT_IDS
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secrets
+                  key: TELEGRAM_ALLOWED_CHAT_IDS
+                  optional: true
           resources:
             requests:
               cpu: 100m

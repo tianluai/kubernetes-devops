@@ -82,6 +82,8 @@ jobs:
           AUTH_GOOGLE_SECRET: ${{ secrets.AUTH_GOOGLE_SECRET }}
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
           CREDENTIALS_ENCRYPTION_KEYS: ${{ secrets.CREDENTIALS_ENCRYPTION_KEYS }}
+          TELEGRAM_ALLOWED_CHAT_IDS: ${{ secrets.TELEGRAM_ALLOWED_CHAT_IDS }}
+          NODE_ENV: production
         run: bash scripts/ensure-k8s-secrets.sh
 
       - name: Rollout (pick up secrets + manifests)
@@ -147,11 +149,13 @@ jobs:
           AUTH_GOOGLE_SECRET: ${{ secrets.AUTH_GOOGLE_SECRET }}
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
           CREDENTIALS_ENCRYPTION_KEYS: ${{ secrets.CREDENTIALS_ENCRYPTION_KEYS }}
+          TELEGRAM_ALLOWED_CHAT_IDS: ${{ secrets.TELEGRAM_ALLOWED_CHAT_IDS }}
+          NODE_ENV: production
         run: bash scripts/ensure-k8s-secrets.sh
 
       - name: Rollout (pick up secrets + manifests)
         run: |
-          NS=tianluai-${{ env.ENV }}
+          NS="tianluai-${{ env.ENV }}"
           kubectl rollout restart deployment/tianluai-api deployment/tianluai-web -n "${NS}"
           if ! kubectl rollout status deployment/tianluai-api -n "${NS}" --timeout=300s; then
             echo "::group::Debug: tianluai-api rollout failed"

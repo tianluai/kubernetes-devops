@@ -37,12 +37,25 @@ require CREDENTIALS_ENCRYPTION_KEYS
 NS="$K8S_NAMESPACE"
 SENTRY_DSN_VALUE="$(printf '%s' "${SENTRY_DSN:-}" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
 
+TELEGRAM_ALLOWED_CHAT_IDS_VALUE="$(printf '%s' "${TELEGRAM_ALLOWED_CHAT_IDS:-}" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+
+BACKEND_SECRET_ARGS=(
+  --from-literal=MONGODB_URI="${MONGODB_URI}"
+  --from-literal=AUTH_JWT_SECRET="${AUTH_JWT_SECRET}"
+  --from-literal=SENTRY_DSN="${SENTRY_DSN_VALUE}"
+  --from-literal=CREDENTIALS_ENCRYPTION_KEYS="${CREDENTIALS_ENCRYPTION_KEYS}"
+)
+if [ -n "$TELEGRAM_ALLOWED_CHAT_IDS_VALUE" ]; then
+  BACKEND_SECRET_ARGS+=(--from-literal=TELEGRAM_ALLOWED_CHAT_IDS="${TELEGRAM_ALLOWED_CHAT_IDS_VALUE}")
+fi
+
 kubectl -n "$NS" create secret generic backend-secrets \
-  --from-literal=MONGODB_URI="${MONGODB_URI}" \
-  --from-literal=AUTH_JWT_SECRET="${AUTH_JWT_SECRET}" \
-  --from-literal=SENTRY_DSN="${SENTRY_DSN_VALUE}" \
-  --from-literal=CREDENTIALS_ENCRYPTION_KEYS="${CREDENTIALS_ENCRYPTION_KEYS}" \
+  "${BACKEND_SECRET_ARGS[@]}" \
   --dry-run=client -o yaml | kubectl apply -f -
+
+if [ "${NODE_ENV:-}" = "production" ] && [ -z "$TELEGRAM_ALLOWED_CHAT_IDS_VALUE" ]; then
+  echo "::warning::TELEGRAM_ALLOWED_CHAT_IDS is unset — Telegram bot will not start in production (NODE_ENV=production). Add GitHub Environment secret TELEGRAM_ALLOWED_CHAT_IDS (comma-separated numeric chat ids)." >&2
+fi
 
 verify_backend_credentials_secret() {
   local encoded_payload decoded_payload

@@ -110,6 +110,21 @@ Workspace-scoped OpenAI, Pinecone, and Notion keys are stored in MongoDB as **AE
 - **Generate a key:** `openssl rand -base64 32`, then prefix with a version label, e.g. `v2:paste_here`.
 - **Rotation:** (1) Append the new `vN:...` pair to **`CREDENTIALS_ENCRYPTION_KEYS`** in GitHub Environment + cluster secret. (2) Restart/redeploy the API. New credentials encrypt with the new key; old rows still decrypt. (3) From **tianluai_api**, run **`pnpm rotate-credentials`** against production MongoDB (with **`MONGODB_URI`** and the full multi-version key string) to re-encrypt every row to the active key. Use **`pnpm rotate-credentials -- --dry-run`** first. (4) After verifying, you may remove retired key versions from env only if no ciphertext still references them.
 
+## Telegram bot (API long-polling)
+
+The API runs the Telegram connector inside the **tianluai-api** pod (not a separate service).
+
+| Requirement | Production (`NODE_ENV=production`) | Staging (`NODE_ENV=staging`) |
+|-------------|-----------------------------------|------------------------------|
+| **`TELEGRAM_ALLOWED_CHAT_IDS`** in **`backend-secrets`** | **Required** — comma-separated numeric chat ids (your user id from [@userinfobot](https://t.me/userinfobot), plus group ids if needed). Without it the API logs `Telegram bot not started: set TELEGRAM_ALLOWED_CHAT_IDS in production.` and does not poll. | Optional (bot accepts all chats if unset). |
+| **Bot token** | Save under **Integrations → Telegram** in the web app (encrypted with **`CREDENTIALS_ENCRYPTION_KEYS`**). Optional override: **`TELEGRAM_BOT_TOKEN`** in **`backend-secrets`**. | Same |
+| **Workspace link** | Set automatically when an admin saves the Telegram credential; uses that workspace for RAG. | Same |
+| **Replicas** | Keep **`tianluai-api` replicas: 1** while using long-polling (two pods = duplicate `getUpdates` conflicts). | Same |
+
+**GitHub:** add **`TELEGRAM_ALLOWED_CHAT_IDS`** to **kubernetes-devops** → **Settings → Environments → prod** (and staging if you want allowlisting). Re-run **Deploy production** so **`ensure-k8s-secrets.sh`** syncs it, then **`kubectl rollout restart deployment/tianluai-api -n tianluai-prod`**.
+
+**Verify:** `kubectl logs -n tianluai-prod -l app=tianluai-api --tail=100 | grep -i telegram` — expect `Telegram bot @YourBot active for workspace=… (polling).`
+
 ## New developer (runtime secrets)
 
 1. **Normal path:** Get access to **kubernetes-devops** repo settings → **Environments** → add or edit **`MONGODB_URI`**, **`CLERK_SECRET_KEY`**, **`SENTRY_DSN`** for `staging` / `prod`. No local secret files; **run Deploy workflow** (or wait for app `repository_dispatch`) to sync the cluster.

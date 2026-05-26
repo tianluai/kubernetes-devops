@@ -82,6 +82,8 @@ jobs:
           AUTH_GOOGLE_SECRET: ${{ secrets.AUTH_GOOGLE_SECRET }}
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
           CREDENTIALS_ENCRYPTION_KEYS: ${{ secrets.CREDENTIALS_ENCRYPTION_KEYS }}
+          TELEGRAM_ALLOWED_CHAT_IDS: ${{ secrets.TELEGRAM_ALLOWED_CHAT_IDS }}
+          NODE_ENV: staging
         run: bash scripts/ensure-k8s-secrets.sh
 
       - name: Rollout (pick up secrets + manifests)
@@ -147,6 +149,8 @@ jobs:
           AUTH_GOOGLE_SECRET: ${{ secrets.AUTH_GOOGLE_SECRET }}
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
           CREDENTIALS_ENCRYPTION_KEYS: ${{ secrets.CREDENTIALS_ENCRYPTION_KEYS }}
+          TELEGRAM_ALLOWED_CHAT_IDS: ${{ secrets.TELEGRAM_ALLOWED_CHAT_IDS }}
+          NODE_ENV: staging
         run: bash scripts/ensure-k8s-secrets.sh
 
       - name: Rollout (pick up secrets + manifests)
