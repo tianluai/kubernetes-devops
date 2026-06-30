@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: api
-          image: registry.digitalocean.com/tianluai/tianluai-api:0.0.55
+          image: registry.digitalocean.com/tianluai/tianluai-api:0.0.56
           # Repeat secret env wiring here so prod applies never ship a Deployment without it
           # (older clusters / partial applies can otherwise miss base-only keys and crash-loop:
           # CredentialsCryptoService requires CREDENTIALS_ENCRYPTION_KEYS).
